@@ -3,12 +3,17 @@
 #include <FS.h>
 #include <SD.h>
 #include <Arduino_GFX_Library.h>
-#include "definitions.hpp"
+#include "Definitions.hpp"
 #include "Screen.hpp"
+#include "System.hpp"
+
+void registerSettingsApplication();
+void registerMockApplication();
+Application* app;
 
 Arduino_DataBus *lcdBus = new Arduino_ESP32SPI(TFT_DC, TFT_CS, TFT_SCLK, TFT_MOSI, SD_MISO_PIN, FSPI, true);
 
-Arduino_GFX *gfx = new Arduino_ST7789(lcdBus, TFT_RST, 0, TFT_WIDTH, TFT_HEIGHT);
+Arduino_GFX *gfx = new Arduino_ST7789(lcdBus, TFT_RST, 1, true, TFT_WIDTH, TFT_HEIGHT, TFT_X_OFFSET, TFT_Y_OFFSET, TFT_X_OFFSET, TFT_Y_OFFSET);
 
 // SD kütüphanesi için SPI nesnesi
 SPIClass sdSpi(FSPI);
@@ -23,6 +28,9 @@ void setup()
 
     Serial.println();
     Serial.println("ESP32-C6 SD + LCD baslatiliyor...");
+
+    registerSettingsApplication();
+    registerMockApplication();
 
     // ========================================
     // Button initialization
@@ -54,7 +62,6 @@ void setup()
     }
 
     // Portrait orientation: 172 x 320
-    gfx->setRotation(0);
     gfx->fillScreen(COLOR_BACKGROUND);
     gfx->setTextWrap(true);
 
@@ -89,35 +96,38 @@ void setup()
     Serial.println("SD kart basariyla baglandi.");
     digitalWrite(SD_CS_PIN, HIGH);
 
-    setBacklightBrightness(1);
-
-    gfx->fillScreen(RGB565_CYAN);
+    setBacklightBrightness(127);
+    app = System::getInstance().rootApplicationFolder->getApplication(0);
+    
 }
 
+int x = 0;
+int y = 0;
+bool changed = true;
 void loop()
 {
-    /*
-     * Buton kısmı değiştirilmedi.
-     * INPUT_PULLUP olduğundan basılı durum LOW'dur.
-     */
 
-    if (digitalRead(BUTTON_UP_PIN) == LOW)
-    {
-        Serial.println("UP");
+    System::getInstance().interface.draw(gfx);
+    
+
+    if(digitalRead(BUTTON_UP_PIN) == 0){
+        System::getInstance().interface.runApp();
+    }
+    if(digitalRead(BUTTON_DOWN_PIN) == 0){
+        y++;
+        changed = true;
+    }
+    if(digitalRead(BUTTON_RIGHT_PIN) == 0){
+        System::getInstance().interface.incrementIndex();
+        delay(200);
+    }
+    if(digitalRead(BUTTON_LEFT_PIN) == 0){
+        System::getInstance().interface.decrementIndex();
+        delay(200);
     }
 
-    if (digitalRead(BUTTON_RIGHT_PIN) == LOW)
-    {
-        Serial.println("RIGHT");
-    }
 
-    if (digitalRead(BUTTON_DOWN_PIN) == LOW)
-    {
-        Serial.println("DOWN");
-    }
+    
 
-    if (digitalRead(BUTTON_LEFT_PIN) == LOW)
-    {
-        Serial.println("LEFT");
-    }
+
 }

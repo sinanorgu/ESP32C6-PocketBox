@@ -1,0 +1,94 @@
+#include "System.hpp"
+
+
+System::System() {
+    rootApplicationFolder = new ApplicationFolder("Root");
+}
+
+bool System::addApplication(Application* app, ApplicationFolder* folder)
+{
+    if(folder == nullptr){
+        rootApplicationFolder->addApplication(app);
+        return true;
+    } else {
+        folder->addApplication(app);
+        return true;
+    }
+}
+
+bool System::addApplicationFolder(ApplicationFolder* folder, ApplicationFolder* parentFolder)
+{
+    if (folder == nullptr) {
+        return false;
+    }
+
+    if (parentFolder == nullptr) {
+        childApplicationFolders.push_back(folder);
+        return true;
+    }
+
+    parentFolder->addFolder(folder);
+    return true;
+}
+
+
+
+
+
+void Interface::drawMenu(Arduino_GFX* gfx, int16_t x, int16_t y) const{
+    int iconSize = 100;
+    int appCount = System::getInstance().rootApplicationFolder->getApplicationCount();
+    for(int i = 0; i < 3; i++){
+        int appIndex = offset  + i;
+
+        if(appIndex < appCount){
+            if(index == appIndex){
+                int iconX = x + iconSize * i + margin * (i+1);
+                int iconY = y + 20;
+                gfx->drawRoundRect(iconX-3, iconY-3, iconSize+6, iconSize+6, 8, RGB565_CYAN);
+            }
+
+            Application* app = System::getInstance().rootApplicationFolder->getApplication(appIndex);
+            if(app != nullptr){
+                int iconX = x + iconSize * i + margin * (i+1);
+                int iconY = y + 20;
+                app->drawIcon(gfx, iconX, iconY, iconSize, iconSize);
+            }
+            
+        }
+        
+    }
+}
+
+
+void Interface::incrementIndex() {
+    int appCount = System::getInstance().rootApplicationFolder->getApplicationCount();
+    if (index < appCount - 1) {
+        index++;
+        if (innerIndex < 2) {
+            innerIndex++;
+        } else {
+            offset++;
+        }
+        changed = true;
+    }
+}
+void Interface::decrementIndex() {
+    int appCount = System::getInstance().rootApplicationFolder->getApplicationCount();
+    if (index > 0) {
+        index--;
+        if (innerIndex > 0) {
+            innerIndex--;
+        } else {
+            offset--;
+        }
+        changed = true;
+    }
+}
+
+void Interface::runApp() {
+    Application* app = System::getInstance().rootApplicationFolder->getApplication(index);
+    if (app != nullptr) {
+        app->run();
+    }
+}

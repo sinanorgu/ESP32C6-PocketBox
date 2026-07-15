@@ -3,7 +3,7 @@
 #include <FS.h>
 #include <SD.h>
 #include <Arduino_GFX_Library.h>
-#include "definitions.hpp"
+#include "Definitions.hpp"
 
 // Ekrana yazılacak mevcut satır
 int16_t lcdCursorY = CONTENT_START_Y;

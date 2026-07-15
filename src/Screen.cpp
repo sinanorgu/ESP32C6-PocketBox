@@ -1,4 +1,5 @@
-#include "definitions.hpp"
+#include "Definitions.hpp"
+#include "Screen.hpp"
 
 void setBacklightBrightness(uint8_t brightness) {
     // Set the backlight brightness using PWM
