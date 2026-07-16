@@ -3,7 +3,7 @@
 #include "Application.hpp"
 #include "Event.hpp"
 #include "Definitions.hpp"
-
+#include "WifiManager.hpp"
 
 
 class Interface {
@@ -19,11 +19,7 @@ public:
 
     void drawMenu(Arduino_GFX* gfx, int16_t x, int16_t y) const;
     
-    void drawInfoPanel(Arduino_GFX* gfx, int16_t x, int16_t y) const{
-
-        gfx->fillRect(x, y, TFT_HEIGHT, infoPanelHeight, RGB565_DARKGREY);
-        gfx->drawRect(x, y, TFT_HEIGHT, infoPanelHeight, RGB565_WHITE);
-    }
+    void drawInfoPanel(Arduino_GFX* gfx, int16_t x, int16_t y) const;
 
     void draw(Arduino_GFX* gfx){
         if(gfx == nullptr || changed == false){
@@ -42,12 +38,15 @@ public:
 
 
 class System{
-    
+    public:
+        Interface interface;
+        EventQueue<32> systemEventQueue;
+        WifiManager wifiManager;
+
+
     public:
         bool addApplication(Application* app, ApplicationFolder* folder);
         bool addApplicationFolder(ApplicationFolder* folder, ApplicationFolder* parentFolder = nullptr);
-        Interface interface;
-        EventQueue<32> systemEventQueue;
         static System& getInstance(){
             static System instance;
             return instance;
@@ -55,15 +54,10 @@ class System{
         std::vector<ApplicationFolder*> childApplicationFolders;
         ApplicationFolder * rootApplicationFolder;
 
-
-
     private:
         System();
         System(const System&) = delete;
         System& operator=(const System&) = delete;
-
-
-    
 };
 
 

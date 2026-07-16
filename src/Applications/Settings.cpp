@@ -14,6 +14,8 @@ SettingsApplication::SettingsApplication(){
 
 void SettingsApplication::run() {
     Serial.println("Settings application opened");
+    System::getInstance().wifiManager.scanWifiNetworks();
+    delay(1000);
 }
 
 void SettingsApplication::drawIcon(Arduino_GFX* gfx, int16_t x, int16_t y, int16_t width, int16_t height) const {

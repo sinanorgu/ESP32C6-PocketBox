@@ -92,3 +92,42 @@ void Interface::runApp() {
         app->run();
     }
 }
+
+void Interface::drawInfoPanel(Arduino_GFX* gfx, int16_t x, int16_t y) const{
+    gfx->fillRect(x, y, TFT_HEIGHT, infoPanelHeight, RGB565_DARKGREY);
+    gfx->drawRect(x, y, TFT_HEIGHT, infoPanelHeight, RGB565_WHITE);
+    
+    // Draw the Wi-Fi icon
+    {
+    int start_angle = -140, end_angle = -40; 
+    int color = RGB565(255, 0, 0);
+    int offsetX = 20, offsetY = infoPanelHeight-3;
+    gfx->fillArc(x+offsetX, y+offsetY, 15, 13, start_angle, end_angle, color);
+    gfx->fillArc(x+offsetX, y+offsetY, 10, 8,  start_angle, end_angle, color);
+    gfx->fillArc(x+offsetX, y+offsetY, 5, 4,  start_angle, end_angle, color);
+    gfx->fillCircle(x+offsetX, y+offsetY, 1, color);
+    }
+
+    //draw bluettooth icon
+    {
+    int centerX = 45;
+    int centerY = infoPanelHeight/2;
+    int color = RGB565(255, 0, 0);
+    int sizeX = 5, sizeY = 4;
+    gfx->drawLine(centerX-sizeX, centerY - sizeY, centerX+sizeX, centerY + sizeY, color);    
+    gfx->drawLine(centerX-sizeX, centerY + sizeY, centerX+sizeX, centerY - sizeY, color);      
+    gfx->drawLine(centerX+sizeX, centerY + sizeY, centerX, centerY + sizeY*2, color); 
+    gfx->drawLine(centerX+sizeX, centerY - sizeY, centerX, centerY - sizeY*2, color);
+    gfx->drawFastVLine(centerX, centerY - sizeY*2, sizeY*4, color); 
+    }
+
+    //Draw time:
+    {
+        int offsetX = 130;
+        int offsetY = 3;
+        gfx->setCursor(x+offsetX, y+offsetY);
+        gfx->setTextColor(RGB565(255, 255, 255));
+        gfx->setTextSize(2);
+        gfx->print("12:34");
+    }
+}
