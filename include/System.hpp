@@ -42,7 +42,7 @@ class System{
         Interface interface;
         EventQueue<32> systemEventQueue;
         WifiManager wifiManager;
-
+        Arduino_GFX *gfx;
 
     public:
         bool addApplication(Application* app, ApplicationFolder* folder);

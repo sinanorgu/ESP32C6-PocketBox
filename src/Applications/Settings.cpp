@@ -1,5 +1,7 @@
 #include "Application.hpp"
 #include "System.hpp"
+#include "ListMenu.hpp"
+#include "Definitions.hpp"
 
 class SettingsApplication : public Application {
     public:
@@ -12,10 +14,53 @@ SettingsApplication::SettingsApplication(){
     name = "Settings";
 }
 
+void wifiSettingsCallback() {
+    Serial.println("WiFi Settings selected");
+    System::getInstance().wifiManager.scanWifiNetworks();
+    
+}
 void SettingsApplication::run() {
     Serial.println("Settings application opened");
-    System::getInstance().wifiManager.scanWifiNetworks();
-    delay(1000);
+    ListMenu menu;
+
+    int16_t menuX = 0;
+    int16_t menuY = System::getInstance().interface.infoPanelHeight + System::getInstance().interface.margin;
+    int16_t menuWidth = TFT_HEIGHT;
+    int16_t menuHeight = TFT_WIDTH - menuY;
+
+    menu.setGraphics(menuX, menuY, menuWidth, menuHeight);
+
+    menu.addtoList("WiFi Settings", wifiSettingsCallback);
+
+    menu.addtoList("Display Settings", nullptr);
+    menu.addtoList("System Info", nullptr);
+    menu.addtoList("System Info1", nullptr);
+    menu.addtoList("System Info2", nullptr);
+    
+
+    
+    
+    while (true) {
+        menu.draw();
+        if(digitalRead(BUTTON_DOWN_PIN) == LOW){
+            menu.incrementIndex();
+            delay(200);
+        }
+        if(digitalRead(BUTTON_UP_PIN) == LOW){
+            menu.decrementIndex();
+            delay(200);
+        }
+        if(digitalRead(BUTTON_RIGHT_PIN) == LOW){
+            menu.runSelectedItem();
+            delay(200);
+        }
+        if(digitalRead(BUTTON_LEFT_PIN) == LOW){
+            delay(200);
+            break; // Exit the settings application
+        }
+
+    }
+    
 }
 
 void SettingsApplication::drawIcon(Arduino_GFX* gfx, int16_t x, int16_t y, int16_t width, int16_t height) const {

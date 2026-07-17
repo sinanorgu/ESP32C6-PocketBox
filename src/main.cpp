@@ -28,7 +28,7 @@ void setup()
 
     Serial.println();
     Serial.println("ESP32-C6 SD + LCD baslatiliyor...");
-
+    System::getInstance().gfx = gfx;
     registerSettingsApplication();
     registerMockApplication();
 
@@ -112,6 +112,8 @@ void loop()
 
     if(digitalRead(BUTTON_UP_PIN) == 0){
         System::getInstance().interface.runApp();
+        System::getInstance().interface.changed = true; // Mark the interface as changed to redraw the main menu
+
     }
     if(digitalRead(BUTTON_DOWN_PIN) == 0){
         y++;
