@@ -93,10 +93,12 @@ class ListMenu {
             this->maxVisibleItems = height / textHeight;
             
         }
+    
+    public :
+        bool changed;
     private:
         int innerIndex;
         int offset;
-        bool changed;
         ListMenuItem* items[64];
         uint8_t itemCount ;
         int maxVisibleItems;

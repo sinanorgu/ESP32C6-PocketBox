@@ -64,8 +64,7 @@ void WifiManager::scanWifiNetworks()
      * async       = false
      * show_hidden = true
      */
-    const int16_t networkCount =
-        WiFi.scanNetworks(false, true);
+    const int16_t networkCount = WiFi.scanNetworks(false, true);
 
     if (networkCount == WIFI_SCAN_FAILED) {
         Serial.println("Wi-Fi taramasi basarisiz.");
@@ -107,6 +106,42 @@ void WifiManager::scanWifiNetworks()
      */
     WiFi.scanDelete();
 }
+
+
+
+std::vector<String>& WifiManager::getAvailableNetworks()
+{
+    availableNetworks.clear();
+    WiFi.mode(WIFI_STA);
+    WiFi.disconnect(false, false);
+    delay(100);
+    const int16_t networkCount = WiFi.scanNetworks(false, true);
+
+    if (networkCount == WIFI_SCAN_FAILED) {
+        Serial.println("Wi-Fi taramasi basarisiz.");
+        return availableNetworks;
+    }
+
+    if (networkCount == 0) {
+        Serial.println("Hicbir Wi-Fi agi bulunamadi.");
+        WiFi.scanDelete();
+        return availableNetworks;
+    }
+
+    Serial.printf(
+        "%d Wi-Fi agi bulundu:\n\n",
+        networkCount
+    );
+
+    for (int16_t i = 0; i < networkCount; ++i) {
+        const String ssid = WiFi.SSID(i);
+        availableNetworks.push_back(ssid);
+    }
+    WiFi.scanDelete();
+
+    return availableNetworks;
+}
+
 
 bool WifiManager::connectToWiFi(
     const char* ssid,

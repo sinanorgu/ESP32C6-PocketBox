@@ -16,9 +16,39 @@ SettingsApplication::SettingsApplication(){
 
 void wifiSettingsCallback() {
     Serial.println("WiFi Settings selected");
-    System::getInstance().wifiManager.scanWifiNetworks();
+    std::vector<String> networks = System::getInstance().wifiManager.getAvailableNetworks();
+    ListMenu wifiMenu;
+    int16_t menuX = 0;
+    int16_t menuY = System::getInstance().interface.infoPanelHeight + System::getInstance().interface.margin;
+    int16_t menuWidth = TFT_HEIGHT;
+    int16_t menuHeight = TFT_WIDTH - menuY;
+    wifiMenu.setGraphics(menuX, menuY, menuWidth, menuHeight);  
     
+    for (const auto& network : networks) {
+        wifiMenu.addtoList(network, nullptr);
+    }
+        
+    while (true) {
+        wifiMenu.draw();
+        if(digitalRead(BUTTON_DOWN_PIN) == LOW){
+            wifiMenu.incrementIndex();
+            delay(200);
+        }
+        if(digitalRead(BUTTON_UP_PIN) == LOW){
+            wifiMenu.decrementIndex();
+            delay(200);
+        }
+        if(digitalRead(BUTTON_RIGHT_PIN) == LOW){
+            wifiMenu.runSelectedItem();
+            delay(200);
+        }
+        if(digitalRead(BUTTON_LEFT_PIN) == LOW){
+            delay(200);
+            break; // Exit the settings application
+        }
+    }
 }
+
 void SettingsApplication::run() {
     Serial.println("Settings application opened");
     ListMenu menu;
@@ -53,6 +83,7 @@ void SettingsApplication::run() {
         if(digitalRead(BUTTON_RIGHT_PIN) == LOW){
             menu.runSelectedItem();
             delay(200);
+            menu.changed = true; // Mark the menu as changed to redraw after returning from the callback
         }
         if(digitalRead(BUTTON_LEFT_PIN) == LOW){
             delay(200);
