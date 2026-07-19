@@ -31,8 +31,6 @@ enum class EventType : uint8_t
     BluetoothConnected,
     BluetoothDisconnected,
 
-    // User-defined event
-    Custom
 };
 
 enum class ButtonCode : uint8_t
@@ -58,7 +56,7 @@ struct Event
         struct
         {
             uint16_t keyCode;
-            char character;
+            uint32_t character;
             bool ctrl;
             bool alt;
             bool shift;
@@ -87,7 +85,10 @@ template <size_t Capacity>
 class EventQueue
 {
 public:
-    bool push(const Event &event);
+    EventQueue() {
+        mutex = xSemaphoreCreateMutex();
+    }
+    bool push(Event &event);
     bool pop(Event &event);
     bool peek(Event &event) const;
     bool isEmpty() const;
@@ -99,8 +100,119 @@ public:
 private:
     static constexpr size_t nextIndex(size_t index);
 private:
+    SemaphoreHandle_t mutex; 
     Event buffer_[Capacity];
     size_t head_ = 0;
     size_t tail_ = 0;
     size_t count_ = 0;
 };
+
+
+
+template <size_t Capacity>
+bool EventQueue<Capacity>::push(Event &event)
+{
+    if (xSemaphoreTake(mutex, portMAX_DELAY) != pdTRUE) {
+        return false;
+    }
+    if (isFull()) {
+        xSemaphoreGive(mutex);
+        return false;
+    }
+
+    buffer_[tail_] = event;
+    tail_ = nextIndex(tail_);
+    count_++;
+    xSemaphoreGive(mutex);
+
+    return true;
+}
+
+template <size_t Capacity>
+bool EventQueue<Capacity>::pop(Event &event)
+{
+    if (xSemaphoreTake(mutex, portMAX_DELAY) != pdTRUE) {
+        return false;
+    }
+    if (isEmpty()) {
+        xSemaphoreGive(mutex);
+        return false;
+    }
+
+    event = buffer_[head_];
+    head_ = nextIndex(head_);
+    count_--;
+    xSemaphoreGive(mutex);
+    return true;
+}
+
+template <size_t Capacity>
+bool EventQueue<Capacity>::peek(Event &event) const
+{
+    if (xSemaphoreTake(mutex, portMAX_DELAY) != pdTRUE) {
+        return false;
+    }
+    if (isEmpty()) {
+        xSemaphoreGive(mutex);
+        return false;
+    }
+
+    event = buffer_[head_];
+    xSemaphoreGive(mutex);
+    return true;
+}
+
+template <size_t Capacity>
+bool EventQueue<Capacity>::isEmpty() const
+{
+
+    bool result = count_ == 0;
+    return result;
+}
+
+template <size_t Capacity>
+bool EventQueue<Capacity>::isFull() const
+{
+
+    bool result = count_ == Capacity;
+    return result;
+}
+
+template <size_t Capacity>
+size_t EventQueue<Capacity>::size() const
+{
+    
+    size_t result = count_;
+    return result;
+}
+
+template <size_t Capacity>
+constexpr size_t EventQueue<Capacity>::capacity() const
+{
+    if (xSemaphoreTake(mutex, portMAX_DELAY) != pdTRUE) {
+        return 0;
+    }
+    size_t result = Capacity;
+    xSemaphoreGive(mutex);
+    return result;
+}
+
+template <size_t Capacity>
+void EventQueue<Capacity>::clear()
+{
+    if (xSemaphoreTake(mutex, portMAX_DELAY) != pdTRUE) {
+        return;
+    }
+    head_ = 0;
+    tail_ = 0;
+    count_ = 0;
+    xSemaphoreGive(mutex);
+}
+
+template <size_t Capacity>
+constexpr size_t EventQueue<Capacity>::nextIndex(size_t index)
+{
+    
+    size_t result = (index + 1) % Capacity;
+    return result;
+}

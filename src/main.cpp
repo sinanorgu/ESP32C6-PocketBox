@@ -6,8 +6,11 @@
 #include "Definitions.hpp"
 #include "Screen.hpp"
 #include "System.hpp"
+#include "BleManager.hpp"
+
 
 void registerSettingsApplication();
+void registerKeyboardTestApplication();
 void registerMockApplication();
 Application* app;
 
@@ -28,9 +31,11 @@ void setup()
 
     Serial.println();
     Serial.println("ESP32-C6 SD + LCD baslatiliyor...");
-    System::getInstance().gfx = gfx;
+    System::getInstance().setGFX(gfx);
     registerSettingsApplication();
+    registerKeyboardTestApplication();
     registerMockApplication();
+    BLE_init();
 
     // ========================================
     // Button initialization
@@ -107,7 +112,7 @@ bool changed = true;
 void loop()
 {
 
-    System::getInstance().interface.draw(gfx);
+    System::getInstance().interface.draw();
     
 
     if(digitalRead(BUTTON_UP_PIN) == 0){
