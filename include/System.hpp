@@ -4,6 +4,7 @@
 #include "Event.hpp"
 #include "Definitions.hpp"
 #include "WifiManager.hpp"
+#include "SdCardManager.hpp"
 
 
 class Interface {
@@ -12,27 +13,29 @@ class Interface {
         int offset;
         int innerIndex;
         int infoPanelHeight;
+        int arrowPanelHeight;
         int margin = 5;
         bool changed;
         Arduino_GFX *gfx;
     
     private:
 
-        bool isBleConnected = false;
-        bool isWifiConnected = false;
         struct {
             uint16_t ble:1, 
                     wifi:1, 
                     time:1,
-                    menu:1;
+                    menu:1,
+                    sdCard:1;
         } dirtyFlags;
 
     public:    
-        Interface() : index(0), offset(0), innerIndex(0), infoPanelHeight(20), changed(true), dirtyFlags({1,1,1,1}) {}
+        Interface() : index(0), offset(0), innerIndex(0), infoPanelHeight(20), arrowPanelHeight(20), changed(true), dirtyFlags({1,1,1,1,1}) {}
 
         void drawMenu(int16_t x, int16_t y) const;
         
         void drawInfoPanel(int16_t x, int16_t y);
+
+        void drawArrowPanel(int16_t x, int16_t y);
 
         void draw(){
             if(gfx == nullptr || changed == false){
@@ -45,6 +48,7 @@ class Interface {
             gfx->fillScreen(COLOR_BACKGROUND);
             drawInfoPanel(0, 0);
             drawMenu(0, infoPanelHeight);
+            //drawArrowPanel(0, TFT_WIDTH - arrowPanelHeight);
             changed = false;
         }
 
@@ -52,13 +56,15 @@ class Interface {
         void decrementIndex();
         void runApp();
         void setBleConnectionStatus(bool status) {
-            isBleConnected = status;
             dirtyFlags.ble = 1;
             drawInfoPanel(0, 0); // Redraw the info panel to reflect the change
         }
         void setWifiConnectionStatus(bool status) {
-            isWifiConnected = status;
             dirtyFlags.wifi = 1;
+            drawInfoPanel(0, 0); // Redraw the info panel to reflect the change
+        }
+        void setSdCardStatus(bool status) {
+            dirtyFlags.sdCard = 1;
             drawInfoPanel(0, 0); // Redraw the info panel to reflect the change
         }
 };
@@ -69,7 +75,12 @@ class System{
         Interface interface;
         EventQueue<32> * systemEventQueue;
         WifiManager wifiManager;
+        SdCardManager sdCardManager;
         Arduino_GFX *gfx;
+
+        bool isSDCardInserted = false;
+        bool isWifiConnected = false;
+        bool isBleConnected = false;
 
     public:
         bool addApplication(Application* app, ApplicationFolder* folder);
@@ -84,6 +95,19 @@ class System{
         void setGFX(Arduino_GFX *gfx) {
             this->gfx = gfx;
             interface.gfx = gfx;
+        }
+
+        void setBleConnectionStatus(bool status) {
+            isBleConnected = status;
+            interface.drawInfoPanel(0, 0); // Redraw the info panel to reflect the change
+        }
+        void setWifiConnectionStatus(bool status) {
+            isWifiConnected = status;
+            interface.drawInfoPanel(0, 0); // Redraw the info panel to reflect the change
+        }
+        void setSdCardStatus(bool status) {
+            isSDCardInserted = status;
+            interface.drawInfoPanel(0, 0); // Redraw the info panel to reflect the change
         }
 
     private:

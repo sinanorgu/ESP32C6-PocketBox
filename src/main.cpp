@@ -7,11 +7,15 @@
 #include "Screen.hpp"
 #include "System.hpp"
 #include "BleManager.hpp"
+#include "SdCardManager.hpp"
+#include "libssh_esp32.h"
+#include "SshManager.hpp"
 
 
 void registerSettingsApplication();
 void registerKeyboardTestApplication();
 void registerMockApplication();
+void registerShellApplication();
 Application* app;
 
 Arduino_DataBus *lcdBus = new Arduino_ESP32SPI(TFT_DC, TFT_CS, TFT_SCLK, TFT_MOSI, SD_MISO_PIN, FSPI, true);
@@ -20,6 +24,9 @@ Arduino_GFX *gfx = new Arduino_ST7789(lcdBus, TFT_RST, 1, true, TFT_WIDTH, TFT_H
 
 // SD kütüphanesi için SPI nesnesi
 SPIClass sdSpi(FSPI);
+
+Shell shell;
+SSHManager sshManager(shell);
 
 
 void setup()
@@ -32,8 +39,13 @@ void setup()
     Serial.println();
     Serial.println("ESP32-C6 SD + LCD baslatiliyor...");
     System::getInstance().setGFX(gfx);
+    
+    // ========================================
+    // Application registration
+    // ========================================
     registerSettingsApplication();
     registerKeyboardTestApplication();
+    registerShellApplication();
     registerMockApplication();
     BLE_init();
 
@@ -90,15 +102,48 @@ void setup()
         Serial.println("1. Kart yuvaya tam takili mi?");
         Serial.println("2. Kart FAT32 olarak bicimlendirilmis mi?");
         Serial.println("3. GPIO pinleri dogru mu?");
-        return;
     }
 
     if (SD.cardType() == CARD_NONE)
     {
         Serial.println("SD yuvasinda kart algilanmadi.");
-        return;
+        System::getInstance().isSDCardInserted = false;
     }
-    Serial.println("SD kart basariyla baglandi.");
+    else{
+        Serial.println("SD kart basariyla baglandi.");
+        System::getInstance().isSDCardInserted = true;
+        FileSystemManager fsManager;
+        int8_t fsCheckResult = fsManager.checkFileSystem();
+        if (fsCheckResult != 0) {
+            Serial.println("Dosya sistemi kontrolu basarisiz oldu. Dosya sistemi olusturuluyor...");
+            const char* username = "admin";
+            const char* password = "admin";
+            int8_t fsCreateResult = fsManager.createFileSystem((char*)username, (char*)password);
+            if (fsCreateResult != 0) {
+                Serial.println("Dosya sistemi olusturulamadi.");
+            } else {
+                Serial.println("Dosya sistemi basariyla olusturuldu.");
+            }
+        } else {
+            Serial.println("Dosya sistemi kontrolu basarili oldu.");
+        }
+    }
+
+
+
+
+    if(!System::getInstance().wifiManager.connectToWiFi("pcshtr","dsgg5223")){
+        Serial.println("wifiye baglanilamadi\n");
+    }
+
+    sshManager.begin(
+        "sinan",
+        "test123",
+        "/PocketBox/System/ssh_host_ed25519_key",
+        22
+    );
+
+
     digitalWrite(SD_CS_PIN, HIGH);
 
     setBacklightBrightness(127);
@@ -132,9 +177,4 @@ void loop()
         System::getInstance().interface.decrementIndex();
         delay(200);
     }
-
-
-    
-
-
 }

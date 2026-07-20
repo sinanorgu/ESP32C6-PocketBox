@@ -95,9 +95,14 @@ void Interface::runApp() {
 }
 
 void Interface::drawInfoPanel(int16_t x, int16_t y){
+
+
     gfx->fillRect(x, y, TFT_HEIGHT, infoPanelHeight, RGB565_DARKGREY);
     gfx->drawRect(x, y, TFT_HEIGHT, infoPanelHeight, RGB565_WHITE);
     
+    bool isWifiConnected = System::getInstance().isWifiConnected;
+    bool isBleConnected = System::getInstance().isBleConnected; 
+    bool isSDCardInserted = System::getInstance().isSDCardInserted;
 
     // Draw the Wi-Fi icon
     {
@@ -124,6 +129,22 @@ void Interface::drawInfoPanel(int16_t x, int16_t y){
         gfx->drawFastVLine(centerX, centerY - sizeY*2, sizeY*4, color); 
         dirtyFlags.ble = 0;
     }
+    
+    //draw Sd card icon
+    {
+        int centerX = 70;
+        int centerY = infoPanelHeight/2;
+        int color = isSDCardInserted ? RGB565(0, 255, 0) : RGB565(255, 0, 0);
+        int sizeX = 10, sizeY = 8;
+        gfx->drawRect(centerX-sizeX, centerY - sizeY, sizeX*2, sizeY*2, color);    
+        gfx->setCursor(centerX-sizeX+2, centerY - sizeY + 2);
+        gfx->setTextColor(color);
+        gfx->setTextSize(1);
+        gfx->print("SD");
+        dirtyFlags.sdCard = 0;
+    }
+    
+
 
     //Draw time:
     {
@@ -133,5 +154,30 @@ void Interface::drawInfoPanel(int16_t x, int16_t y){
         gfx->setTextColor(RGB565(255, 255, 255));
         gfx->setTextSize(2);
         gfx->print("12:34");
+    }
+}
+
+void Interface::drawArrowPanel(int16_t x, int16_t y){
+    gfx->fillRect(x, y, TFT_HEIGHT, arrowPanelHeight, RGB565_DARKGREY);
+    gfx->drawRect(x, y, TFT_HEIGHT, arrowPanelHeight, RGB565_WHITE);
+
+    // Draw left arrow
+    {
+        int centerX = 20;
+        int centerY = y + arrowPanelHeight / 2;
+        int size = 10;
+        gfx->drawLine(centerX + size, centerY - size, centerX - size, centerY, RGB565_WHITE);
+        gfx->drawLine(centerX + size, centerY + size, centerX - size, centerY, RGB565_WHITE);
+        dirtyFlags.menu = 0;
+    }
+
+    // Draw right arrow
+    {
+        int centerX = TFT_HEIGHT - 20;
+        int centerY = y + arrowPanelHeight / 2;
+        int size = 10;
+        gfx->drawLine(centerX - size, centerY - size, centerX + size, centerY, RGB565_WHITE);
+        gfx->drawLine(centerX - size, centerY + size, centerX + size, centerY, RGB565_WHITE);
+        dirtyFlags.menu = 0;
     }
 }

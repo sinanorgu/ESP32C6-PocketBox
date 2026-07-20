@@ -21,8 +21,28 @@ class TextBox {
         : x(x), y(y), width(width), height(height), textColor(textColor), backgroundColor(backgroundColor) {
             text[0] = '\0'; // Initialize the text array
             textSize = 0; // Default text size
-            
+        }
+        void clearText() {  
+            text[0] = '\0'; // Clear the text
+            textSize = 0; // Reset the text size
+        }
 
+        void setText(Arduino_GFX* gfx, char *newText, size_t size) {
+            Event event;
+            event.type = EventType::TextInput;
+            for(int i = 0; i < size && i < Capacity - 1; i++) {
+                event.event.keyboard.character = newText[i];
+                draw(gfx, event); // Draw the character                
+            }
+        }
+
+        void setPosition(int16_t newX, int16_t newY) {
+            x = newX;
+            y = newY;
+        }
+        void setSize(int16_t newWidth, int16_t newHeight) {
+            width = newWidth;
+            height = newHeight;
         }
 
         void draw(Arduino_GFX* gfx, Event event) {
@@ -47,7 +67,8 @@ class TextBox {
                             gfx->fillRect(0, beforeCursorY, width, height + y - beforeCursorY , backgroundColor); // Clear the line above if needed
                         }
                     }
-                } else {
+                } 
+                else {
                     if(textSize >= Capacity - 1) {
                         return; // Prevent buffer overflow
                     }

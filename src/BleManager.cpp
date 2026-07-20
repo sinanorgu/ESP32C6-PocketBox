@@ -18,13 +18,13 @@ void MyServerCallbacks::onConnect(BLEServer *pServer) {
     deviceConnected = true;
     Serial.println("📲 Telefon bağlandı");
     System::getInstance().interface.changed = true;
-    System::getInstance().interface.setBleConnectionStatus(true);
+    System::getInstance().setBleConnectionStatus(true);
 }
 
 void MyServerCallbacks::onDisconnect(BLEServer *pServer) {
     deviceConnected = false;
     Serial.println("📴 Telefon bağlantısı kesildi");
-    System::getInstance().interface.setBleConnectionStatus(false);
+    System::getInstance().setBleConnectionStatus(false);
     pServer->getAdvertising()->start();
 }
 
