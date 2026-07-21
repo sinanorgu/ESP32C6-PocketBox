@@ -193,6 +193,9 @@ void SSHManager::serverTask()
 
         if (channel)
         {
+            escapeState = EscapeState::None;
+            cursorPosition = 0;
+            
             handleClient(session, channel);
 
             ssh_channel_send_eof(channel);
