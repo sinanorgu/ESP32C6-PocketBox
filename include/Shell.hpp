@@ -19,13 +19,14 @@ enum class ShellResult
 
 size_t split(char* str, char delimiter, char* tokens[], size_t maxTokens);
 void executeLs(ShellOutput& output, const char* path);
+void executeCd(ShellOutput& output, const char* path, char* currentDirectory, size_t& currentDirectoryLength);
 void executeOtherCommands(ShellOutput& output, const char* command);
 
 class Shell {
     public:
         Shell() = default;
         char workingDirectory[256] = "/PocketBox";
-        size_t workingDirectoryLength = 10; // Length of "/PocketBox"
+        size_t workingDirectoryNameLength = 10; // Length of "/PocketBox"
         char* argv[16]; // Array to hold command arguments
         ShellResult executeCommand(const char* command, ShellOutput& output) {
             
@@ -49,7 +50,7 @@ class Shell {
             } else if (strcmp(cmd, "cd") == 0) {
                 // Implement cd command logic here
                 Serial.println("Executing cd command...");
-                executeOtherCommands(output, command);
+                executeCd(output, argv[1], workingDirectory, workingDirectoryNameLength);
             } else if (strcmp(cmd, "pwd") == 0) {
                 Serial.println("Executing pwd command...");
                 // Implement pwd command logic here
@@ -67,11 +68,16 @@ class Shell {
                 Serial.println("Shutting down system...");
                 return ShellResult::Shutdown;
             }
+            else if (strcmp(cmd,"clear") == 0) {
+                Serial.println("Clearing output...");
+                output.clear();
+            }
             else {
                 Serial.print("Unknown command: ");
                 Serial.println(cmd);
                 executeOtherCommands(output,"unknown command");
             }
+            
 
         return ShellResult::Continue;
         }
