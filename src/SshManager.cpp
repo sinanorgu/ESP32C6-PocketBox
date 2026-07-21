@@ -8,7 +8,8 @@ SSHKeyManager keyManager{
 };
 
 ssh_key hostKey = nullptr;
-
+EscapeState escapeState = EscapeState::None;
+size_t cursorPosition = 0;
 
 SSHManager::SSHManager(Shell& shell)
     : shell(shell)
@@ -379,10 +380,61 @@ void SSHManager::handleClient(
         }
     }
 }
+
 InputResult SSHManager::processCharacter(
     char character,
     SSHOutput& output)
 {
+    if (escapeState == EscapeState::Escape)
+    {
+        escapeState =
+            (character == '[')
+            ? EscapeState::CSI
+            : EscapeState::None;
+
+        return InputResult::Continue;
+    }
+
+    if (escapeState == EscapeState::CSI)
+    {
+        escapeState = EscapeState::None;
+
+        switch (character)
+        {
+            case 'A':
+                // Yukarı: history
+                break;
+
+            case 'B':
+                // Aşağı: history
+                break;
+
+            case 'C': // Sağ
+                if (cursorPosition < lineLength)
+                {
+                    ++cursorPosition;
+                    output.write("\x1b[C");
+                }
+                break;
+
+            case 'D': // Sol
+                if (cursorPosition > 0)
+                {
+                    --cursorPosition;
+                    output.write("\x1b[D");
+                }
+                break;
+        }
+
+        return InputResult::Continue;
+    }
+
+    if (character == '\x1B')
+    {
+        escapeState = EscapeState::Escape;
+        return InputResult::Continue;
+    }
+
     if (character == '\r' || character == '\n')
     {
         if (lineLength == 0)
@@ -396,6 +448,7 @@ InputResult SSHManager::processCharacter(
             shell.executeCommand(lineBuffer, output);
 
         lineLength = 0;
+        cursorPosition = 0;
         lineBuffer[0] = '\0';
 
         if (result == ShellResult::Exit)
@@ -408,11 +461,27 @@ InputResult SSHManager::processCharacter(
 
     if (character == '\b' || character == 0x7F)
     {
-        if (lineLength > 0)
+        if (cursorPosition > 0)
         {
+            memmove(
+                &lineBuffer[cursorPosition - 1],
+                &lineBuffer[cursorPosition],
+                lineLength - cursorPosition + 1
+            );
+
+            --cursorPosition;
             --lineLength;
-            lineBuffer[lineLength] = '\0';
-            output.write("\b \b");
+
+            output.write("\b");
+
+            output.write(&lineBuffer[cursorPosition]);
+            output.write(" ");
+
+            size_t moveBack =
+                lineLength - cursorPosition + 1;
+
+            for (size_t i = 0; i < moveBack; ++i)
+                output.write("\b");
         }
 
         return InputResult::Continue;
@@ -421,6 +490,7 @@ InputResult SSHManager::processCharacter(
     if (character == 0x03)
     {
         lineLength = 0;
+        cursorPosition = 0;
         lineBuffer[0] = '\0';
 
         output.write("^C\r\n");
@@ -429,20 +499,35 @@ InputResult SSHManager::processCharacter(
         return InputResult::Continue;
     }
 
-    if (!isPrintable(character))
+    if (!isPrintable(static_cast<unsigned char>(character)))
         return InputResult::Continue;
 
     if (lineLength >= sizeof(lineBuffer) - 1)
         return InputResult::Continue;
 
-    lineBuffer[lineLength++] = character;
-    lineBuffer[lineLength] = '\0';
+    memmove(
+        &lineBuffer[cursorPosition + 1],
+        &lineBuffer[cursorPosition],
+        lineLength - cursorPosition + 1
+    );
 
-    char echo[2] = {character, '\0'};
-    output.write(echo);
+    lineBuffer[cursorPosition] = character;
+
+    ++cursorPosition;
+    ++lineLength;
+
+    // Cursor konumundan itibaren tüm kalan metni tekrar çiz.
+    output.write(&lineBuffer[cursorPosition - 1]);
+
+    // Cursor'ı tekrar doğru konuma getir.
+    size_t moveBack = lineLength - cursorPosition;
+
+    for (size_t i = 0; i < moveBack; ++i)
+        output.write("\b");
 
     return InputResult::Continue;
 }
+
 void SSHManager::writePrompt(SSHOutput& output)
 {
     output.write("\x1b[1;32mpocketbox\x1b[0m:");

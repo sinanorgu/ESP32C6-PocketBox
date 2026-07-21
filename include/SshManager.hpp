@@ -79,3 +79,11 @@ private:
 
     bool running = false;
 };
+
+enum class EscapeState
+{
+    None,
+    Escape,
+    CSI
+};
+
