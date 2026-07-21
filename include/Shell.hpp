@@ -22,6 +22,13 @@ void executeLs(ShellOutput& output, const char* path);
 void executeCd(ShellOutput& output, const char* path, char* currentDirectory, size_t& currentDirectoryLength);
 void executeOtherCommands(ShellOutput& output, const char* command);
 void executeCat(ShellOutput& output, const char* path, const char* currentDirectory);
+void executeRm(ShellOutput& output, const char* path, const char* currentDirectory);
+void executeMkdir(ShellOutput& output, const char* path, const char* currentDirectory);
+void executeTouch(ShellOutput& output, const char* path, const char* currentDirectory);
+void executeCp(ShellOutput& output, const char* sourcePath, const char* destinationPath, const char* currentDirectory);
+void executeMv(ShellOutput& output, const char* sourcePath, const char* destinationPath, const char* currentDirectory);
+void executePwd(ShellOutput& output, const char* currentDirectory);
+void executeRmdir(ShellOutput& output, const char* path, const char* currentDirectory);
 
 class Shell {
     public:
@@ -49,13 +56,11 @@ class Shell {
                 executeLs(output, workingDirectory);
 
             } else if (strcmp(cmd, "cd") == 0) {
-                // Implement cd command logic here
                 Serial.println("Executing cd command...");
                 executeCd(output, argv[1], workingDirectory, workingDirectoryNameLength);
             } else if (strcmp(cmd, "pwd") == 0) {
                 Serial.println("Executing pwd command...");
-                // Implement pwd command logic here
-                executeOtherCommands(output, command);
+                executePwd(output, workingDirectory);
             }
             else if (strcmp(cmd, "exit") == 0) {
                 Serial.println("Exiting shell...");
@@ -76,6 +81,30 @@ class Shell {
             else if (strcmp(cmd,"cat") == 0) {
                 Serial.println("Executing cat command...");
                 executeCat(output, argv[1], workingDirectory);
+            }
+            else if(strcmp(cmd,"rm") == 0) {
+                Serial.println("Executing rm command...");
+                executeRm(output, argv[1], workingDirectory);
+            }
+            else if(strcmp(cmd,"mkdir") == 0) {
+                Serial.println("Executing mkdir command...");
+                executeMkdir(output, argv[1], workingDirectory);
+            }
+            else if(strcmp(cmd,"touch") == 0) {
+                Serial.println("Executing touch command...");
+                executeTouch(output, argv[1], workingDirectory);
+            }
+            else if(strcmp(cmd,"cp") == 0) {
+                Serial.println("Executing cp command...");
+                executeCp(output, argv[1], argv[2], workingDirectory);
+            }
+            else if(strcmp(cmd,"mv") == 0) {
+                Serial.println("Executing mv command...");
+                executeMv(output, argv[1], argv[2], workingDirectory);
+            }
+            else if(strcmp(cmd,"rmdir") == 0) {
+                Serial.println("Executing rmdir command...");
+                executeRmdir(output, argv[1], workingDirectory);
             }
             else {
                 Serial.print("Unknown command: ");

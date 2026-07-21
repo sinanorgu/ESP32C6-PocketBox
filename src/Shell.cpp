@@ -263,3 +263,392 @@ void executeCat(
 
     file.close();
 }
+
+void executeRm(
+    ShellOutput& output,
+    const char* path,
+    const char* currentDirectory)
+{
+    if (!path || path[0] == '\0')
+    {
+        output.write("rm: missing argument\r\n");
+        return;
+    }
+
+    char fullPath[256];
+
+    if (!resolvePath(
+            currentDirectory,
+            path,
+            fullPath,
+            sizeof(fullPath)))
+    {
+        output.write("rm: path is too long\r\n");
+        return;
+    }
+
+    File file = SD.open(fullPath);
+
+    if (!file)
+    {
+        output.write("rm: no such file: ");
+        output.write(path);
+        output.write("\r\n");
+        return;
+    }
+
+    if (file.isDirectory())
+    {
+        file.close();
+
+        output.write("rm: is a directory: ");
+        output.write(path);
+        output.write("\r\n");
+        return;
+    }
+
+    file.close();
+
+    if (!SD.remove(fullPath))
+    {
+        output.write("rm: failed to remove: ");
+        output.write(path);
+        output.write("\r\n");
+    }
+}
+
+void executeMkdir(
+    ShellOutput& output,
+    const char* path,
+    const char* currentDirectory)
+{
+    if (!path || path[0] == '\0')
+    {
+        output.write("mkdir: missing argument\r\n");
+        return;
+    }
+
+    char fullPath[256];
+
+    if (!resolvePath(
+            currentDirectory,
+            path,
+            fullPath,
+            sizeof(fullPath)))
+    {
+        output.write("mkdir: path is too long\r\n");
+        return;
+    }
+
+    File existing = SD.open(fullPath);
+
+    if (existing)
+    {
+        existing.close();
+
+        output.write("mkdir: file or directory already exists: ");
+        output.write(path);
+        output.write("\r\n");
+        return;
+    }
+
+    if (!SD.mkdir(fullPath))
+    {
+        output.write("mkdir: failed to create directory: ");
+        output.write(path);
+        output.write("\r\n");
+    }
+}
+
+void executeTouch(
+    ShellOutput& output,
+    const char* path,
+    const char* currentDirectory)
+{
+    if (!path || path[0] == '\0')
+    {
+        output.write("touch: missing argument\r\n");
+        return;
+    }
+
+    char fullPath[256];
+
+    if (!resolvePath(
+            currentDirectory,
+            path,
+            fullPath,
+            sizeof(fullPath)))
+    {
+        output.write("touch: path is too long\r\n");
+        return;
+    }
+
+    File existing = SD.open(fullPath);
+
+    if (existing)
+    {
+        if (existing.isDirectory())
+        {
+            existing.close();
+
+            output.write("touch: is a directory: ");
+            output.write(path);
+            output.write("\r\n");
+            return;
+        }
+
+        existing.close();
+        return;
+    }
+
+    File file = SD.open(fullPath, FILE_WRITE);
+
+    if (!file)
+    {
+        output.write("touch: failed to create file: ");
+        output.write(path);
+        output.write("\r\n");
+        return;
+    }
+
+    file.close();
+}
+
+void executeCp(
+    ShellOutput& output,
+    const char* sourcePath,
+    const char* destinationPath,
+    const char* currentDirectory)
+{
+    if (!sourcePath || sourcePath[0] == '\0' ||
+        !destinationPath || destinationPath[0] == '\0')
+    {
+        output.write("cp: missing argument\r\n");
+        return;
+    }
+
+    char source[256];
+    char destination[256];
+
+    if (!resolvePath(
+            currentDirectory,
+            sourcePath,
+            source,
+            sizeof(source)) ||
+        !resolvePath(
+            currentDirectory,
+            destinationPath,
+            destination,
+            sizeof(destination)))
+    {
+        output.write("cp: path is too long\r\n");
+        return;
+    }
+
+    if (strcmp(source, destination) == 0)
+    {
+        output.write("cp: source and destination are the same\r\n");
+        return;
+    }
+
+    File sourceFile = SD.open(source, FILE_READ);
+
+    if (!sourceFile)
+    {
+        output.write("cp: no such file: ");
+        output.write(sourcePath);
+        output.write("\r\n");
+        return;
+    }
+
+    if (sourceFile.isDirectory())
+    {
+        sourceFile.close();
+
+        output.write("cp: source is a directory: ");
+        output.write(sourcePath);
+        output.write("\r\n");
+        return;
+    }
+
+    File existingDestination = SD.open(destination);
+
+    if (existingDestination)
+    {
+        existingDestination.close();
+        sourceFile.close();
+
+        output.write("cp: destination already exists: ");
+        output.write(destinationPath);
+        output.write("\r\n");
+        return;
+    }
+
+    File destinationFile = SD.open(destination, FILE_WRITE);
+
+    if (!destinationFile)
+    {
+        sourceFile.close();
+
+        output.write("cp: failed to create destination: ");
+        output.write(destinationPath);
+        output.write("\r\n");
+        return;
+    }
+
+    uint8_t buffer[256];
+    bool success = true;
+
+    while (sourceFile.available())
+    {
+        size_t bytesRead =
+            sourceFile.read(buffer, sizeof(buffer));
+
+        if (bytesRead == 0)
+            break;
+
+        size_t bytesWritten =
+            destinationFile.write(buffer, bytesRead);
+
+        if (bytesWritten != bytesRead)
+        {
+            success = false;
+            break;
+        }
+    }
+
+    sourceFile.close();
+    destinationFile.close();
+
+    if (!success)
+    {
+        SD.remove(destination);
+
+        output.write("cp: failed while copying file\r\n");
+    }
+}
+
+void executeMv(
+    ShellOutput& output,
+    const char* sourcePath,
+    const char* destinationPath,
+    const char* currentDirectory)
+{
+    if (!sourcePath || sourcePath[0] == '\0' ||
+        !destinationPath || destinationPath[0] == '\0')
+    {
+        output.write("mv: missing argument\r\n");
+        return;
+    }
+
+    char source[256];
+    char destination[256];
+
+    if (!resolvePath(
+            currentDirectory,
+            sourcePath,
+            source,
+            sizeof(source)) ||
+        !resolvePath(
+            currentDirectory,
+            destinationPath,
+            destination,
+            sizeof(destination)))
+    {
+        output.write("mv: path is too long\r\n");
+        return;
+    }
+
+    if (strcmp(source, destination) == 0)
+        return;
+
+    File sourceFile = SD.open(source);
+
+    if (!sourceFile)
+    {
+        output.write("mv: no such file or directory: ");
+        output.write(sourcePath);
+        output.write("\r\n");
+        return;
+    }
+
+    sourceFile.close();
+
+    File destinationFile = SD.open(destination);
+
+    if (destinationFile)
+    {
+        destinationFile.close();
+
+        output.write("mv: destination already exists: ");
+        output.write(destinationPath);
+        output.write("\r\n");
+        return;
+    }
+
+    if (!SD.rename(source, destination))
+    {
+        output.write("mv: failed to move: ");
+        output.write(sourcePath);
+        output.write("\r\n");
+    }
+}
+
+void executeRmdir(
+    ShellOutput& output,
+    const char* path,
+    const char* currentDirectory)
+{
+    if (!path || path[0] == '\0')
+    {
+        output.write("rmdir: missing argument\r\n");
+        return;
+    }
+
+    char fullPath[256];
+
+    if (!resolvePath(
+            currentDirectory,
+            path,
+            fullPath,
+            sizeof(fullPath)))
+    {
+        output.write("rmdir: path is too long\r\n");
+        return;
+    }
+
+    File dir = SD.open(fullPath);
+
+    if (!dir)
+    {
+        output.write("rmdir: no such directory: ");
+        output.write(path);
+        output.write("\r\n");
+        return;
+    }
+
+    if (!dir.isDirectory())
+    {
+        dir.close();
+
+        output.write("rmdir: not a directory: ");
+        output.write(path);
+        output.write("\r\n");
+        return;
+    }
+
+    dir.close();
+
+    if (!SD.rmdir(fullPath))
+    {
+        output.write("rmdir: failed to remove directory (not empty?)\r\n");
+    }
+}
+
+void executePwd(
+    ShellOutput& output,
+    const char* currentDirectory)
+{
+    output.write(currentDirectory);
+    output.write("\r\n");
+}
