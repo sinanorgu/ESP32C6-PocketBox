@@ -21,6 +21,7 @@ size_t split(char* str, char delimiter, char* tokens[], size_t maxTokens);
 void executeLs(ShellOutput& output, const char* path);
 void executeCd(ShellOutput& output, const char* path, char* currentDirectory, size_t& currentDirectoryLength);
 void executeOtherCommands(ShellOutput& output, const char* command);
+void executeCat(ShellOutput& output, const char* path, const char* currentDirectory);
 
 class Shell {
     public:
@@ -72,11 +73,16 @@ class Shell {
                 Serial.println("Clearing output...");
                 output.clear();
             }
+            else if (strcmp(cmd,"cat") == 0) {
+                Serial.println("Executing cat command...");
+                executeCat(output, argv[1], workingDirectory);
+            }
             else {
                 Serial.print("Unknown command: ");
                 Serial.println(cmd);
                 executeOtherCommands(output,"unknown command");
             }
+            
             
 
         return ShellResult::Continue;
