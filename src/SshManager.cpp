@@ -462,6 +462,19 @@ InputResult SSHManager::processCharacter(
         return InputResult::Continue;
     }
 
+    if (character == '\t')
+    {
+        shell.autoComplete(
+            lineBuffer,
+            lineLength,
+            cursorPosition,
+            output
+        );
+
+    return InputResult::Continue;
+}
+
+
     if (character == '\b' || character == 0x7F)
     {
         if (cursorPosition > 0)

@@ -652,3 +652,247 @@ void executePwd(
     output.write(currentDirectory);
     output.write("\r\n");
 }
+
+void Shell::autoComplete(
+    char* lineBuffer,
+    size_t& lineLength,
+    size_t& cursorPosition,
+    ShellOutput& output)
+{
+    constexpr size_t LINE_BUFFER_SIZE = 256;
+    constexpr size_t PATH_BUFFER_SIZE = 256;
+
+    if (!lineBuffer || cursorPosition > lineLength)
+        return;
+
+    // Cursor'dan geriye giderek mevcut argümanın başlangıcını bul.
+    size_t tokenStart = cursorPosition;
+
+    while (tokenStart > 0)
+    {
+        char previous = lineBuffer[tokenStart - 1];
+
+        if (previous == ' ' || previous == '\t')
+            break;
+
+        --tokenStart;
+    }
+
+    size_t tokenLength = cursorPosition - tokenStart;
+
+    if (tokenLength >= PATH_BUFFER_SIZE)
+    {
+        output.write("\a");
+        return;
+    }
+
+    char token[PATH_BUFFER_SIZE];
+
+    memcpy(token, &lineBuffer[tokenStart], tokenLength);
+    token[tokenLength] = '\0';
+
+    /*
+     * Örnek:
+     *
+     * token = "folder/tes"
+     * directoryPart = "folder"
+     * prefix = "tes"
+     *
+     * token = "tes"
+     * directoryPart = "."
+     * prefix = "tes"
+     */
+    char directoryPart[PATH_BUFFER_SIZE];
+    char prefix[PATH_BUFFER_SIZE];
+
+    const char* lastSlash = strrchr(token, '/');
+
+    if (lastSlash)
+    {
+        size_t directoryLength =
+            static_cast<size_t>(lastSlash - token);
+
+        if (directoryLength == 0)
+        {
+            // "/tes" durumunda aranacak klasör root'tur.
+            strcpy(directoryPart, "/");
+        }
+        else
+        {
+            memcpy(directoryPart, token, directoryLength);
+            directoryPart[directoryLength] = '\0';
+        }
+
+        strncpy(
+            prefix,
+            lastSlash + 1,
+            sizeof(prefix) - 1
+        );
+
+        prefix[sizeof(prefix) - 1] = '\0';
+    }
+    else
+    {
+        strcpy(directoryPart, ".");
+
+        strncpy(prefix, token, sizeof(prefix) - 1);
+        prefix[sizeof(prefix) - 1] = '\0';
+    }
+
+    char resolvedDirectory[PATH_BUFFER_SIZE];
+
+    if (!resolvePath(
+            workingDirectory,
+            directoryPart,
+            resolvedDirectory,
+            sizeof(resolvedDirectory)))
+    {
+        output.write("\a");
+        return;
+    }
+
+    File directory = SD.open(resolvedDirectory);
+
+    if (!directory || !directory.isDirectory())
+    {
+        if (directory)
+            directory.close();
+
+        output.write("\a");
+        return;
+    }
+
+    size_t prefixLength = strlen(prefix);
+    size_t matchCount = 0;
+
+    char commonPrefix[PATH_BUFFER_SIZE] = {};
+    bool singleMatchIsDirectory = false;
+
+    File entry;
+
+    while ((entry = directory.openNextFile()))
+    {
+        const char* entryPath = entry.name();
+
+        // Bazı FS implementasyonları entry.name() içinde tam path döndürebilir.
+        const char* entryName = strrchr(entryPath, '/');
+
+        if (entryName)
+            ++entryName;
+        else
+            entryName = entryPath;
+
+        if (strncmp(entryName, prefix, prefixLength) != 0)
+        {
+            entry.close();
+            continue;
+        }
+
+        if (matchCount == 0)
+        {
+            strncpy(
+                commonPrefix,
+                entryName,
+                sizeof(commonPrefix) - 1
+            );
+
+            commonPrefix[sizeof(commonPrefix) - 1] = '\0';
+            singleMatchIsDirectory = entry.isDirectory();
+        }
+        else
+        {
+            size_t index = 0;
+
+            while (commonPrefix[index] != '\0' &&
+                   entryName[index] != '\0' &&
+                   commonPrefix[index] == entryName[index])
+            {
+                ++index;
+            }
+
+            commonPrefix[index] = '\0';
+            singleMatchIsDirectory = false;
+        }
+
+        ++matchCount;
+        entry.close();
+    }
+
+    directory.close();
+
+    if (matchCount == 0)
+    {
+        output.write("\a");
+        return;
+    }
+
+    size_t commonPrefixLength = strlen(commonPrefix);
+
+    // Yazılmış prefix'ten daha fazla ortak bölüm bulunamadı.
+    if (commonPrefixLength <= prefixLength)
+    {
+        output.write("\a");
+        return;
+    }
+
+    char completion[PATH_BUFFER_SIZE];
+
+    strncpy(
+        completion,
+        commonPrefix + prefixLength,
+        sizeof(completion) - 1
+    );
+
+    completion[sizeof(completion) - 1] = '\0';
+
+    size_t completionLength = strlen(completion);
+
+    // Tek eşleşme klasörse sonuna "/" ekle.
+    if (matchCount == 1 && singleMatchIsDirectory)
+    {
+        if (completionLength + 1 < sizeof(completion))
+        {
+            completion[completionLength++] = '/';
+            completion[completionLength] = '\0';
+        }
+    }
+
+    if (lineLength + completionLength >= LINE_BUFFER_SIZE)
+    {
+        output.write("\a");
+        return;
+    }
+
+    /*
+     * Cursor satırın ortasındaysa sağ taraftaki metni kaydır.
+     * Null terminator da taşındığı için +1 var.
+     */
+    memmove(
+        &lineBuffer[cursorPosition + completionLength],
+        &lineBuffer[cursorPosition],
+        lineLength - cursorPosition + 1
+    );
+
+    memcpy(
+        &lineBuffer[cursorPosition],
+        completion,
+        completionLength
+    );
+
+    size_t oldCursorPosition = cursorPosition;
+
+    cursorPosition += completionLength;
+    lineLength += completionLength;
+
+    /*
+     * Eklenen bölümden itibaren satırın kalanını yeniden çiz.
+     */
+    output.write(&lineBuffer[oldCursorPosition]);
+
+    // Terminal cursor'ını eklenen metnin sonuna geri getir.
+    size_t charactersAfterCursor =
+        lineLength - cursorPosition;
+
+    for (size_t i = 0; i < charactersAfterCursor; ++i)
+        output.write("\b");
+}

@@ -116,7 +116,7 @@ class Shell {
 
         return ShellResult::Continue;
         }
-
+        void autoComplete(char* lineBuffer, size_t& lineLength, size_t& cursorPosition, ShellOutput& output);
 
     
     private:
