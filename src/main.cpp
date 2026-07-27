@@ -113,20 +113,9 @@ void setup()
         Serial.println("SD kart basariyla baglandi.");
         System::getInstance().isSDCardInserted = true;
         FileSystemManager fsManager;
-        int8_t fsCheckResult = fsManager.checkFileSystem();
-        if (fsCheckResult != 0) {
-            Serial.println("Dosya sistemi kontrolu basarisiz oldu. Dosya sistemi olusturuluyor...");
-            const char* username = "admin";
-            const char* password = "admin";
-            int8_t fsCreateResult = fsManager.createFileSystem((char*)username, (char*)password);
-            if (fsCreateResult != 0) {
-                Serial.println("Dosya sistemi olusturulamadi.");
-            } else {
-                Serial.println("Dosya sistemi basariyla olusturuldu.");
-            }
-        } else {
-            Serial.println("Dosya sistemi kontrolu basarili oldu.");
-        }
+        const char* username = "admin";
+        const char* password = "admin";
+        int8_t fsCreateResult = fsManager.createFileSystem((char*)username, (char*)password);
     }
 
 
