@@ -7,9 +7,10 @@
 
 class ListMenuItem {
 public:
-    ListMenuItem(const String& n, void (*a)()) : name(n), action(a) {}
+    ListMenuItem(const String& n, void (*a)(void *), void* params = nullptr) : name(n), action(a), params(params) {}
     String name;
-    void (*action)();
+    void (*action)(void *);
+    void* params;
 };
 
 class ListMenu {
@@ -66,12 +67,12 @@ class ListMenu {
         void runSelectedItem(){
             int selectedIndex = offset + innerIndex;
             if(selectedIndex < itemCount && items[selectedIndex]->action != nullptr){
-                items[selectedIndex]->action();
+                items[selectedIndex]->action(items[selectedIndex]->params);
             }
         }
-        bool addtoList(const String& name, void (*action)()){
+        bool addtoList(const String& name, void (*action)(void *), void* params = nullptr){
             if(itemCount < 64){
-                items[itemCount] = new ListMenuItem(name, action);
+                items[itemCount] = new ListMenuItem(name, action, params);
                 itemCount++;
                 return true;
             }

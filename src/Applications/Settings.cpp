@@ -14,7 +14,7 @@ SettingsApplication::SettingsApplication(){
     name = "Settings";
 }
 
-void wifiSettingsCallback() {
+void wifiSettingsCallback(void* params) {
     Serial.println("WiFi Settings selected");
     std::vector<String> networks = System::getInstance().wifiManager.getAvailableNetworks();
     ListMenu wifiMenu;
@@ -49,6 +49,53 @@ void wifiSettingsCallback() {
     }
 }
 
+
+void exampleItemCallback(void* params) {
+    char* itemName = static_cast<char*>(params);
+    Serial.printf("Selected item: %s\n", itemName);
+
+}
+
+void exampleCallback(void *params) {
+
+    ListMenu menu;
+
+    int16_t menuX = 0;
+    int16_t menuY = System::getInstance().interface.infoPanelHeight + System::getInstance().interface.margin;
+    int16_t menuWidth = TFT_HEIGHT;
+    int16_t menuHeight = TFT_WIDTH - menuY;
+
+    char namelist[10][10] = {"Item 1", "Item 2", "Item 3", "Item 4", "Item 5", "Item 6", "Item 7", "Item 8", "Item 9", "Item 10"};
+    menu.setGraphics(menuX, menuY, menuWidth, menuHeight);
+
+    for(int i = 0; i < 10; i++){
+        menu.addtoList(namelist[i], exampleItemCallback, &namelist[i]);
+    }
+
+    delay(200);
+    while (true) {
+        menu.draw();
+        if(digitalRead(BUTTON_DOWN_PIN) == LOW){
+            menu.incrementIndex();
+            delay(200);
+        }
+        if(digitalRead(BUTTON_UP_PIN) == LOW){
+            menu.decrementIndex();
+            delay(200);
+        }
+        if(digitalRead(BUTTON_RIGHT_PIN) == LOW){
+            menu.runSelectedItem();
+            delay(200);
+            menu.changed = true; // Mark the menu as changed to redraw after returning from the callback
+        }
+        if(digitalRead(BUTTON_LEFT_PIN) == LOW){
+            delay(200);
+            break; // Exit the settings application
+        }
+
+    }
+}
+
 void SettingsApplication::run() {
     Serial.println("Settings application opened");
     ListMenu menu;
@@ -66,6 +113,8 @@ void SettingsApplication::run() {
     menu.addtoList("System Info", nullptr);
     menu.addtoList("System Info1", nullptr);
     menu.addtoList("System Info2", nullptr);
+    menu.addtoList("Example", exampleCallback);
+
     
 
     
