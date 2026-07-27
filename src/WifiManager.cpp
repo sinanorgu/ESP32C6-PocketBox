@@ -1,6 +1,5 @@
 #include "WifiManager.hpp"
 
-
 const char* encryptionTypeToString(wifi_auth_mode_t encryptionType)
 {
     switch (encryptionType) {
@@ -32,6 +31,7 @@ const char* encryptionTypeToString(wifi_auth_mode_t encryptionType)
             return "UNKNOWN";
     }
 }
+
 
 void WifiManager::scanWifiNetworks()
 {
@@ -215,4 +215,239 @@ bool WifiManager::connectToWiFi(
     );
 
     return true;
+}
+
+WifiNetwork* WifiManager::findKnownNetwork(const char* ssid)
+{
+    if (!ssid)
+        return nullptr;
+
+    for (WifiNetwork& network : knownNetworks)
+    {
+        if (network.ssid == ssid)
+            return &network;
+    }
+
+    return nullptr;
+}
+
+const std::vector<WifiNetwork>& WifiManager::getKnownNetworks() const
+{
+    return knownNetworks;
+}
+
+bool WifiManager::loadKnownNetworks()
+{
+    knownNetworks.clear();
+
+    File file = SD.open(NETWORK_FILE, FILE_READ);
+
+    if (!file)
+    {
+        Serial.println("Failed to open networks file");
+        return false;
+    }
+
+    JsonDocument document;
+
+    DeserializationError error =
+        deserializeJson(document, file);
+
+    file.close();
+
+    if (error)
+    {
+        Serial.print("Failed to parse networks file: ");
+        Serial.println(error.c_str());
+        return false;
+    }
+
+    JsonArray networksArray =
+        document["networks"].as<JsonArray>();
+
+    if (networksArray.isNull())
+    {
+        Serial.println("Networks array not found");
+        return false;
+    }
+
+    for (JsonObject networkObject : networksArray)
+    {
+        const char* ssid =
+            networkObject["ssid"] | "";
+
+        const char* password =
+            networkObject["password"] | "";
+
+        bool autoConnect =
+            networkObject["autoConnect"] | true;
+
+        bool hidden =
+            networkObject["hidden"] | false;
+
+        int priority =
+            networkObject["priority"] | 0;
+
+        if (ssid[0] == '\0')
+        {
+            Serial.println(
+                "Skipping network with empty SSID");
+            continue;
+        }
+
+        knownNetworks.emplace_back(
+            ssid,
+            password,
+            autoConnect,
+            hidden,
+            priority);
+    }
+
+    Serial.printf(
+        "Loaded %u known networks\n",
+        static_cast<unsigned>(knownNetworks.size()));
+
+    return true;
+}
+bool WifiManager::saveKnownNetworks()
+{
+    constexpr const char* TEMP_FILE =
+        NETWORK_FILE ".tmp";
+
+    JsonDocument document;
+
+    JsonArray networksArray =
+        document["networks"].to<JsonArray>();
+
+    for (const WifiNetwork& network : knownNetworks)
+    {
+        JsonObject networkObject =
+            networksArray.add<JsonObject>();
+
+        networkObject["ssid"] =
+            network.ssid;
+
+        networkObject["password"] =
+            network.password;
+
+        networkObject["autoConnect"] =
+            network.autoConnect;
+
+        networkObject["hidden"] =
+            network.hidden;
+
+        networkObject["priority"] =
+            network.priority;
+    }
+
+    SD.remove(TEMP_FILE);
+
+    File file = SD.open(TEMP_FILE, FILE_WRITE);
+
+    if (!file)
+    {
+        Serial.println(
+            "Failed to create temporary networks file");
+        return false;
+    }
+
+    size_t bytesWritten =
+        serializeJsonPretty(document, file);
+
+    file.write('\n');
+    file.close();
+
+    if (bytesWritten == 0)
+    {
+        Serial.println(
+            "Failed to serialize networks file");
+
+        SD.remove(TEMP_FILE);
+        return false;
+    }
+
+    SD.remove(NETWORK_FILE);
+
+    if (!SD.rename(TEMP_FILE, NETWORK_FILE))
+    {
+        Serial.println(
+            "Failed to replace networks file");
+
+        SD.remove(TEMP_FILE);
+        return false;
+    }
+
+    return true;
+}
+
+bool WifiManager::saveNetwork(
+    const char* ssid,
+    const char* password,
+    bool autoConnect,
+    bool hidden,
+    int priority)
+{
+    if (!ssid || ssid[0] == '\0')
+    {
+        Serial.println("SSID cannot be empty");
+        return false;
+    }
+
+    if (!password)
+        password = "";
+
+    WifiNetwork* existingNetwork =
+        findKnownNetwork(ssid);
+
+    if (existingNetwork)
+    {
+        existingNetwork->password =
+            password;
+
+        existingNetwork->autoConnect =
+            autoConnect;
+
+        existingNetwork->hidden =
+            hidden;
+
+        existingNetwork->priority =
+            priority;
+    }
+    else
+    {
+        knownNetworks.emplace_back(
+            ssid,
+            password,
+            autoConnect,
+            hidden,
+            priority);
+    }
+
+    if (!saveKnownNetworks())
+    {
+        Serial.println(
+            "Failed to save known networks");
+        return false;
+    }
+
+    return true;
+}
+
+bool WifiManager::removeNetwork(const char* ssid)
+{
+    if (!ssid || ssid[0] == '\0')
+        return false;
+
+    for (auto iterator = knownNetworks.begin();
+         iterator != knownNetworks.end();
+         ++iterator)
+    {
+        if (iterator->ssid == ssid)
+        {
+            knownNetworks.erase(iterator);
+            return saveKnownNetworks();
+        }
+    }
+
+    return false;
 }

@@ -119,11 +119,27 @@ void setup()
     }
 
 
-
+    System::getInstance().wifiManager.loadKnownNetworks();
+    System::getInstance().wifiManager.saveNetwork(
+        "exampleSSID",
+        "12345678",
+        true,
+        false,
+        100
+    );
+    System::getInstance().wifiManager.saveNetwork(
+        "exampleSSID2",
+        "12345678",
+        true,
+        false,
+        100
+    );
+    
 
     if(!System::getInstance().wifiManager.connectToWiFi("pcshtr","dsgg5223")){
         Serial.println("wifiye baglanilamadi\n");
     }
+
 
     sshManager.begin(
         "sinan",
