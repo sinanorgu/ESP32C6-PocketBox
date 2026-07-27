@@ -249,16 +249,15 @@ void executeCat(
 
     while (file.available())
     {
-        size_t bytesRead = file.read(
-            reinterpret_cast<uint8_t*>(buffer),
-            sizeof(buffer) - 1
-        );
+        char c = file.read();
 
-        if (bytesRead == 0)
-            break;
-
-        buffer[bytesRead] = '\0';
-        output.write(buffer);
+        if (c == '\n')
+            output.write("\r\n");
+        else
+        {
+            char s[2] = {c, '\0'};
+            output.write(s);
+        }
     }
 
     file.close();
