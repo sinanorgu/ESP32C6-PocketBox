@@ -39,6 +39,7 @@ void setup()
     Serial.println();
     Serial.println("ESP32-C6 SD + LCD baslatiliyor...");
     System::getInstance().setGFX(gfx);
+    System::getInstance().setSshManager(&sshManager);
     
     // ========================================
     // Application registration
@@ -120,33 +121,6 @@ void setup()
 
 
     System::getInstance().wifiManager.loadKnownNetworks();
-    System::getInstance().wifiManager.saveNetwork(
-        "exampleSSID",
-        "12345678",
-        true,
-        false,
-        100
-    );
-    System::getInstance().wifiManager.saveNetwork(
-        "exampleSSID2",
-        "12345678",
-        true,
-        false,
-        100
-    );
-    
-
-    if(!System::getInstance().wifiManager.connectToWiFi("pcshtr","dsgg5223")){
-        Serial.println("wifiye baglanilamadi\n");
-    }
-
-
-    sshManager.begin(
-        "sinan",
-        "test123",
-        "/PocketBox/System/ssh_host_ed25519_key",
-        22
-    );
 
 
     digitalWrite(SD_CS_PIN, HIGH);

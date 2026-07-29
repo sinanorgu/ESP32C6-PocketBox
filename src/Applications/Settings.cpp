@@ -2,6 +2,7 @@
 #include "System.hpp"
 #include "ListMenu.hpp"
 #include "Definitions.hpp"
+#include "TextBox.hpp"
 
 class SettingsApplication : public Application {
     public:
@@ -14,7 +15,105 @@ SettingsApplication::SettingsApplication(){
     name = "Settings";
 }
 
-void wifiSettingsCallback(void* params) {
+
+void connectToWiFiCallback(void* params) {
+    delay(1000);
+    char* ssid = static_cast<char*>(params);
+    Serial.printf("Connecting to Wi-Fi network: %s\n", ssid);
+    int16_t menuX = 0;
+    int16_t menuY = System::getInstance().interface.infoPanelHeight + System::getInstance().interface.margin;
+    int16_t menuWidth = TFT_HEIGHT;
+    int16_t menuHeight = TFT_WIDTH - menuY;
+    System::getInstance().gfx->fillRect(menuX, menuY, menuWidth, menuHeight, COLOR_BACKGROUND);
+    System::getInstance().gfx->setCursor(menuX, menuY);
+    System::getInstance().gfx->setTextSize(2);
+    System::getInstance().gfx->setTextColor(RGB565_WHITE);
+    System::getInstance().gfx->printf("Password for %s: ", ssid);
+    
+    int16_t passwordBoxX = menuX;
+    int16_t passwordBoxY = System::getInstance().gfx->getCursorY() + 16; // Position the password box below the prompt
+    int16_t passwordBoxWidth = menuWidth - 10;
+    int16_t passwordBoxHeight = 30;
+    TextBox<32> passwordBox(passwordBoxX, passwordBoxY, passwordBoxWidth, passwordBoxHeight, RGB565_WHITE, COLOR_BACKGROUND);
+
+
+        
+    Event event;
+    
+    while (true) {
+
+        event = System::getInstance().systemEventQueue->pop(event)? event : Event(); 
+        
+        if(event.type == EventType::TextInput) {        
+            //System::getInstance().gfx->print((char)event.event.keyboard.character);
+            passwordBox.draw(System::getInstance().gfx, event);
+        } 
+
+        if(digitalRead(BUTTON_DOWN_PIN) == LOW){
+            delay(200);
+        }
+        if(digitalRead(BUTTON_UP_PIN) == LOW){
+            delay(200);
+        }
+        if(digitalRead(BUTTON_RIGHT_PIN) == LOW){
+            delay(200);
+            // Attempt to connect to Wi-Fi using the entered password
+            char * password = passwordBox.text;
+            bool connected = System::getInstance().wifiManager.connectToWiFi(ssid, password);
+            if (connected) {
+                Serial.println("Connected to Wi-Fi successfully!");
+                System::getInstance().setWifiConnectionStatus(true);
+                System::getInstance().wifiManager.saveNetwork(ssid, password, true, false, 100);
+                System::getInstance().gfx->setCursor(menuX, menuY+36);
+                System::getInstance().gfx->printf("\nConnected to %s", ssid);
+                System::getInstance().sshManager->begin("admin", "admin", "/PocketBox/System/ssh_host_ed25519_key", 22);
+            } else {
+                Serial.println("Failed to connect to Wi-Fi.");  
+                System::getInstance().gfx->printf("\nFailed to connect to %s", ssid);
+                Serial.printf("SSID: %s, Password entered: %s\n", ssid, password);
+    
+            }
+        }
+        if(digitalRead(BUTTON_LEFT_PIN) == LOW){
+            delay(200);
+            break; // Exit the settings application
+        }
+
+    }
+
+    
+}
+
+
+void connectToKnonwnWiFiCallback(void* params){
+    delay(200);
+    char* ssid = static_cast<char*>(params);
+    int16_t menuX = 0;
+    int16_t menuY = System::getInstance().interface.infoPanelHeight + System::getInstance().interface.margin;
+    int16_t menuWidth = TFT_HEIGHT;
+    int16_t menuHeight = TFT_WIDTH - menuY;
+    System::getInstance().gfx->fillRect(menuX, menuY, menuWidth, menuHeight, COLOR_BACKGROUND);
+    System::getInstance().gfx->setCursor(menuX, menuY);
+    System::getInstance().gfx->setTextSize(2);
+    System::getInstance().gfx->setTextColor(RGB565_WHITE);
+    System::getInstance().gfx->printf("Connecting to %s: ", ssid);
+    bool is_connected = System::getInstance().wifiManager.connectToKnownWiFi(ssid);
+    if(is_connected){
+        Serial.printf("Connected to known Wi-Fi network: %s\n", ssid);
+        System::getInstance().setWifiConnectionStatus(true);
+        System::getInstance().gfx->setCursor(menuX, menuY+36);
+        System::getInstance().gfx->printf("\nConnected to %s", ssid);
+        System::getInstance().sshManager->begin("admin", "admin", "/PocketBox/System/ssh_host_ed25519_key", 22);
+        
+
+    } else {
+        Serial.printf("Failed to connect to known Wi-Fi network: %s\n", ssid);
+        System::getInstance().gfx->setCursor(menuX, menuY+36);
+        System::getInstance().gfx->printf("\nFailed to connect to %s", ssid);
+    }
+}
+
+void scanNetworkCallback(void* params) {
     Serial.println("WiFi Settings selected");
     std::vector<String> networks = System::getInstance().wifiManager.getAvailableNetworks();
     ListMenu wifiMenu;
@@ -24,10 +123,12 @@ void wifiSettingsCallback(void* params) {
     int16_t menuHeight = TFT_WIDTH - menuY;
     wifiMenu.setGraphics(menuX, menuY, menuWidth, menuHeight);  
     
+
     for (const auto& network : networks) {
-        wifiMenu.addtoList(network, nullptr);
+        wifiMenu.addtoList(network, connectToWiFiCallback, (void*)network.c_str());
     }
         
+    delay(200);
     while (true) {
         wifiMenu.draw();
         if(digitalRead(BUTTON_DOWN_PIN) == LOW){
@@ -49,6 +150,42 @@ void wifiSettingsCallback(void* params) {
     }
 }
 
+void knownNetworksCallback(void* params) {
+    Serial.println("Known Networks selected");
+    std::vector<WifiNetwork> knownNetworks = System::getInstance().wifiManager.getKnownNetworks();
+    
+    ListMenu knownNetworksMenu;
+    int16_t menuX = 0;
+    int16_t menuY = System::getInstance().interface.infoPanelHeight + System::getInstance().interface.margin;
+    int16_t menuWidth = TFT_HEIGHT;
+    int16_t menuHeight = TFT_WIDTH - menuY;
+    knownNetworksMenu.setGraphics(menuX, menuY, menuWidth, menuHeight);  
+    
+    for (const auto& network : knownNetworks) {
+        knownNetworksMenu.addtoList(network.ssid, connectToKnonwnWiFiCallback, (void*)network.ssid.c_str());
+    }
+        
+    delay(200);
+    while (true) {
+        knownNetworksMenu.draw();
+        if(digitalRead(BUTTON_DOWN_PIN) == LOW){
+            knownNetworksMenu.incrementIndex();
+            delay(200);
+        }
+        if(digitalRead(BUTTON_UP_PIN) == LOW){
+            knownNetworksMenu.decrementIndex();
+            delay(200);
+        }
+        if(digitalRead(BUTTON_RIGHT_PIN) == LOW){
+            knownNetworksMenu.runSelectedItem();
+            delay(200);
+        }
+        if(digitalRead(BUTTON_LEFT_PIN) == LOW){
+            delay(200);
+            break; // Exit the settings application
+        }
+    }
+}
 
 void exampleItemCallback(void* params) {
     char* itemName = static_cast<char*>(params);
@@ -95,6 +232,45 @@ void exampleCallback(void *params) {
 
     }
 }
+
+
+void wifiSettingsCallback(void* params) {
+    ListMenu wifiMenu;
+
+    int16_t menuX = 0;
+    int16_t menuY = System::getInstance().interface.infoPanelHeight + System::getInstance().interface.margin;
+    int16_t menuWidth = TFT_HEIGHT;
+    int16_t menuHeight = TFT_WIDTH - menuY;
+
+    wifiMenu.setGraphics(menuX, menuY, menuWidth, menuHeight);
+
+    wifiMenu.addtoList("Scan Networks", scanNetworkCallback);
+    wifiMenu.addtoList("Known Networks", knownNetworksCallback);
+
+    delay(300);
+    while (true) {
+        wifiMenu.draw();
+        if(digitalRead(BUTTON_DOWN_PIN) == LOW){
+            wifiMenu.incrementIndex();
+            delay(200);
+        }
+        if(digitalRead(BUTTON_UP_PIN) == LOW){
+            wifiMenu.decrementIndex();
+            delay(200);
+        }
+        if(digitalRead(BUTTON_RIGHT_PIN) == LOW){
+            wifiMenu.runSelectedItem();
+            delay(200);
+            wifiMenu.changed = true; // Mark the menu as changed to redraw after returning from the callback
+        }
+        if(digitalRead(BUTTON_LEFT_PIN) == LOW){
+            delay(200);
+            break; // Exit the settings application
+        }
+
+    }
+}
+
 
 void SettingsApplication::run() {
     Serial.println("Settings application opened");

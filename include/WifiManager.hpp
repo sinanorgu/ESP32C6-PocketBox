@@ -37,13 +37,20 @@ public:
 class WifiManager
 {
 public:
-    WifiManager() = default;
+    WifiManager(){
+        WiFi.onEvent(WifiManager::onWiFiEvent);
+    };
 
+    static void onWiFiEvent(arduino_event_id_t event);
     void scanWifiNetworks();
 
     bool connectToWiFi(
         const char* ssid,
         const char* password);
+    bool connectToKnownWiFi(const char* ssid);
+
+    bool isConnected() const;
+
 
     std::vector<String>& getAvailableNetworks();
 

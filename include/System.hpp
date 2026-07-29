@@ -1,3 +1,4 @@
+#pragma once
 #include <Arduino.h>
 #include <Arduino_GFX_Library.h>
 #include "Application.hpp"
@@ -5,6 +6,7 @@
 #include "Definitions.hpp"
 #include "WifiManager.hpp"
 #include "SdCardManager.hpp"
+#include "SshManager.hpp"
 
 
 class Interface {
@@ -25,11 +27,12 @@ class Interface {
                     wifi:1, 
                     time:1,
                     menu:1,
-                    sdCard:1;
+                    sdCard:1,
+                    ssh:1;
         } dirtyFlags;
 
     public:    
-        Interface() : index(0), offset(0), innerIndex(0), infoPanelHeight(20), arrowPanelHeight(20), changed(true), dirtyFlags({1,1,1,1,1}) {}
+        Interface() : index(0), offset(0), innerIndex(0), infoPanelHeight(20), arrowPanelHeight(20), changed(true), dirtyFlags({1,1,1,1,1,1}) {}
 
         void drawMenu(int16_t x, int16_t y) const;
         
@@ -76,11 +79,13 @@ class System{
         EventQueue<32> * systemEventQueue;
         WifiManager wifiManager;
         SdCardManager sdCardManager;
+        SSHManager *sshManager;
         Arduino_GFX *gfx;
 
         bool isSDCardInserted = false;
         bool isWifiConnected = false;
         bool isBleConnected = false;
+        bool isSshBegin = false;
 
     public:
         bool addApplication(Application* app, ApplicationFolder* folder);
@@ -96,6 +101,9 @@ class System{
             this->gfx = gfx;
             interface.gfx = gfx;
         }
+        void setSshManager(SSHManager *sshManager) {
+            this->sshManager = sshManager;
+        }
 
         void setBleConnectionStatus(bool status) {
             isBleConnected = status;
@@ -107,6 +115,11 @@ class System{
         }
         void setSdCardStatus(bool status) {
             isSDCardInserted = status;
+            interface.drawInfoPanel(0, 0); // Redraw the info panel to reflect the change
+        }
+
+        void setSshStatus(bool status) {
+            isSshBegin = status;
             interface.drawInfoPanel(0, 0); // Redraw the info panel to reflect the change
         }
 

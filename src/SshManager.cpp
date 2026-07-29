@@ -1,6 +1,7 @@
 #include "SshManager.hpp"
 #include "libssh_esp32.h"
 #include "SSHKeyManager.hpp"
+#include "System.hpp"
 
 
 SSHKeyManager keyManager{
@@ -59,6 +60,14 @@ bool SSHManager::begin(
 {
     if (running)
         return true;
+    if(System::getInstance().isSDCardInserted == false){
+        Serial.println("SD kart takili degil, SSH server baslatilamadi.");
+        return false;
+    }
+    if(!System::getInstance().wifiManager.isConnected()){
+        Serial.println("Wi-Fi baglantisi yok, SSH server baslatilamadi.");
+        return false;
+    }
 
     this->username = username;
     this->password = password;
@@ -71,6 +80,8 @@ bool SSHManager::begin(
 
     running = true;
 
+    System::getInstance().setSshStatus(true);
+    
     BaseType_t result = xTaskCreate(
         taskEntry,
         "SSHServer",

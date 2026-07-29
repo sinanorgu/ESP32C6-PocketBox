@@ -1,4 +1,5 @@
 #include "WifiManager.hpp"
+#include "System.hpp"
 
 const char* encryptionTypeToString(wifi_auth_mode_t encryptionType)
 {
@@ -30,6 +31,11 @@ const char* encryptionTypeToString(wifi_auth_mode_t encryptionType)
         default:
             return "UNKNOWN";
     }
+}
+
+bool WifiManager::isConnected() const
+{
+    return WiFi.status() == WL_CONNECTED;
 }
 
 
@@ -450,4 +456,48 @@ bool WifiManager::removeNetwork(const char* ssid)
     }
 
     return false;
+}
+
+
+bool WifiManager::connectToKnownWiFi(const char* ssid)
+{
+    WifiNetwork* network = findKnownNetwork(ssid);
+
+    if (!network)
+    {
+        Serial.printf(
+            "No known network found with SSID: %s\n",
+            ssid);
+        return false;
+    }
+
+    return connectToWiFi(
+        network->ssid.c_str(),
+        network->password.c_str());
+}
+
+
+void WifiManager::onWiFiEvent(arduino_event_id_t event)
+{
+    switch (event)
+    {
+        case ARDUINO_EVENT_WIFI_STA_CONNECTED:
+            Serial.println("Connected to AP");
+            System::getInstance().setWifiConnectionStatus(true);
+            break;
+
+        case ARDUINO_EVENT_WIFI_STA_GOT_IP:
+            Serial.println("Got IP");
+            // EventManager.publish(WifiConnectedEvent{});
+            break;
+
+        case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
+            Serial.println("Disconnected");
+            // EventManager.publish(WifiDisconnectedEvent{});
+            System::getInstance().setWifiConnectionStatus(false);
+            break;
+
+        default:
+            break;
+    }
 }

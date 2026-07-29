@@ -103,6 +103,7 @@ void Interface::drawInfoPanel(int16_t x, int16_t y){
     bool isWifiConnected = System::getInstance().isWifiConnected;
     bool isBleConnected = System::getInstance().isBleConnected; 
     bool isSDCardInserted = System::getInstance().isSDCardInserted;
+    bool isSshBegin = System::getInstance().isSshBegin;
 
     // Draw the Wi-Fi icon
     {
@@ -143,6 +144,21 @@ void Interface::drawInfoPanel(int16_t x, int16_t y){
         gfx->print("SD");
         dirtyFlags.sdCard = 0;
     }
+    
+    //draw SSH conncetion icon
+    {
+        int centerX = 100;
+        int centerY = infoPanelHeight/2;
+        int color = isSshBegin ? RGB565(0, 255, 0) : RGB565(255, 0, 0);
+        int sizeX = 12, sizeY = 8;
+        gfx->drawRect(centerX-sizeX, centerY - sizeY, sizeX*2, sizeY*2, color);    
+        gfx->setCursor(centerX-sizeX+2, centerY - sizeY + 2);
+        gfx->setTextColor(color);
+        gfx->setTextSize(1);
+        gfx->print("SSH");
+        dirtyFlags.ssh = 0;
+    }
+    
     
 
 
