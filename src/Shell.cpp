@@ -1,4 +1,50 @@
 #include "Shell.hpp"
+#include "clumsyPL/ClumsyPL.hpp"
+
+
+namespace
+{
+void writeClumsyOutput(const char* text, void* userData)
+{
+    if (!text || !userData)
+        return;
+
+    ShellOutput& output = *static_cast<ShellOutput*>(userData);
+    char buffer[128];
+    size_t length = 0;
+
+    for (const char* cursor = text; *cursor != '\0'; ++cursor)
+    {
+        if (*cursor == '\n')
+        {
+            if (length > sizeof(buffer) - 3)
+            {
+                buffer[length] = '\0';
+                output.write(buffer);
+                length = 0;
+            }
+            buffer[length++] = '\r';
+            buffer[length++] = '\n';
+        }
+        else
+        {
+            if (length == sizeof(buffer) - 1)
+            {
+                buffer[length] = '\0';
+                output.write(buffer);
+                length = 0;
+            }
+            buffer[length++] = *cursor;
+        }
+    }
+
+    if (length > 0)
+    {
+        buffer[length] = '\0';
+        output.write(buffer);
+    }
+}
+}
 
 
 size_t split(char* str, char delimiter, char* tokens[], size_t maxTokens)
@@ -650,6 +696,48 @@ void executePwd(
 {
     output.write(currentDirectory);
     output.write("\r\n");
+}
+
+void executeCpl(
+    ShellOutput& output,
+    const char* path,
+    const char* currentDirectory)
+{
+    if (!path || path[0] == '\0')
+    {
+        output.write("cpl: missing argument\r\n");
+        output.write("usage: cpl <path>\r\n");
+        return;
+    }
+
+    char fullPath[256];
+    if (!resolvePath(currentDirectory, path, fullPath, sizeof(fullPath)))
+    {
+        output.write("cpl: path is too long\r\n");
+        return;
+    }
+
+    clumsy::Runtime runtime;
+    runtime.setOutput(writeClumsyOutput, &output);
+    const clumsy::Result result = runtime.executeFile(SD, fullPath);
+
+    if (!result.ok())
+    {
+        char diagnostic[384];
+        if (result.line > 0)
+        {
+            snprintf(diagnostic, sizeof(diagnostic),
+                "cpl: %s at line %d: %s\r\n",
+                clumsy::statusText(result.status), result.line, result.message);
+        }
+        else
+        {
+            snprintf(diagnostic, sizeof(diagnostic),
+                "cpl: %s: %s\r\n",
+                clumsy::statusText(result.status), result.message);
+        }
+        output.write(diagnostic);
+    }
 }
 
 void Shell::autoComplete(

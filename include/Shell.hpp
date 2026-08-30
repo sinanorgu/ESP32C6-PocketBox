@@ -29,6 +29,7 @@ void executeCp(ShellOutput& output, const char* sourcePath, const char* destinat
 void executeMv(ShellOutput& output, const char* sourcePath, const char* destinationPath, const char* currentDirectory);
 void executePwd(ShellOutput& output, const char* currentDirectory);
 void executeRmdir(ShellOutput& output, const char* path, const char* currentDirectory);
+void executeCpl(ShellOutput& output, const char* path, const char* currentDirectory);
 
 class Shell {
     public:
@@ -106,6 +107,10 @@ class Shell {
                 Serial.println("Executing rmdir command...");
                 executeRmdir(output, argv[1], workingDirectory);
             }
+            else if(strcmp(cmd,"cpl") == 0) {
+                Serial.println("Executing cpl command...");
+                executeCpl(output, argc > 1 ? argv[1] : nullptr, workingDirectory);
+            }
             else {
                 Serial.print("Unknown command: ");
                 Serial.println(cmd);
@@ -123,5 +128,4 @@ class Shell {
         FileSystemManager fileSystemManager;
 
 };
-
 
