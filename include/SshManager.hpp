@@ -62,6 +62,8 @@ private:
     bool beginEditor(const char* path, SSHOutput& output);
     bool saveEditor(SSHOutput& output);
     void closeEditor(SSHOutput& output);
+    void redrawEditor(SSHOutput& output, const char* status = nullptr);
+    void moveEditorVertical(int direction);
 
     void writePrompt(SSHOutput& output);
     bool ensureHostKey(const char* path);
@@ -84,8 +86,12 @@ private:
     static constexpr size_t EditorCapacity = 16U * 1024U;
     char* editorBuffer = nullptr;
     size_t editorLength = 0;
+    size_t editorCursor = 0;
     char editorPath[256]{};
     bool editorActive = false;
+    uint8_t editorEscapeState = 0;
+    int editorCsiParameter = 0;
+    bool editorLastWasCarriageReturn = false;
 
     bool running = false;
 };

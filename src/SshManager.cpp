@@ -579,15 +579,12 @@ bool SSHManager::beginEditor(const char* path, SSHOutput& output)
         file.close();
     }
     editorBuffer[editorLength] = '\0';
+    editorCursor = editorLength;
+    editorEscapeState = 0;
+    editorCsiParameter = 0;
+    editorLastWasCarriageReturn = false;
     editorActive = true;
-    output.clear();
-    output.write("PocketBox nano - Ctrl+O save | Ctrl+X exit\r\n---\r\n");
-    char character[2] = {'\0', '\0'};
-    for (size_t i = 0; i < editorLength; ++i)
-    {
-        if (editorBuffer[i] == '\n') output.write("\r\n");
-        else { character[0] = editorBuffer[i]; output.write(character); }
-    }
+    redrawEditor(output);
     return true;
 }
 
@@ -607,7 +604,7 @@ bool SSHManager::saveEditor(SSHOutput& output)
     { output.write("\r\n[nano: cannot replace file; data kept in .nano.tmp]\r\n"); return false; }
     if (!SD.rename(temporaryPath, editorPath))
     { output.write("\r\n[nano: rename failed; data kept in .nano.tmp]\r\n"); return false; }
-    output.write("\r\n[nano: saved]\r\n");
+    redrawEditor(output, "saved");
     return true;
 }
 
@@ -617,36 +614,172 @@ void SSHManager::closeEditor(SSHOutput& output)
     free(editorBuffer);
     editorBuffer = nullptr;
     editorLength = 0;
+    editorCursor = 0;
     output.write("\r\n[nano: closed]\r\n");
     writePrompt(output);
 }
 
 InputResult SSHManager::processEditorCharacter(char character, SSHOutput& output)
 {
+    if (character == '\n' && editorLastWasCarriageReturn)
+    {
+        editorLastWasCarriageReturn = false;
+        return InputResult::Continue;
+    }
+    editorLastWasCarriageReturn = character == '\r';
+
+    if (editorEscapeState == 1)
+    {
+        if (character == '[')
+        {
+            editorEscapeState = 2;
+            editorCsiParameter = 0;
+        }
+        else editorEscapeState = 0;
+        return InputResult::Continue;
+    }
+    if (editorEscapeState == 2)
+    {
+        if (character >= '0' && character <= '9')
+        {
+            editorCsiParameter = editorCsiParameter * 10 + character - '0';
+            return InputResult::Continue;
+        }
+        editorEscapeState = 0;
+        switch (character)
+        {
+            case 'A': moveEditorVertical(-1); break;
+            case 'B': moveEditorVertical(1); break;
+            case 'C': if (editorCursor < editorLength) ++editorCursor; break;
+            case 'D': if (editorCursor > 0) --editorCursor; break;
+            case 'H':
+                while (editorCursor > 0 && editorBuffer[editorCursor - 1] != '\n') --editorCursor;
+                break;
+            case 'F':
+                while (editorCursor < editorLength && editorBuffer[editorCursor] != '\n') ++editorCursor;
+                break;
+            case '~':
+                if (editorCsiParameter == 3 && editorCursor < editorLength)
+                {
+                    memmove(editorBuffer + editorCursor, editorBuffer + editorCursor + 1,
+                            editorLength - editorCursor);
+                    --editorLength;
+                }
+                break;
+        }
+        editorBuffer[editorLength] = '\0';
+        redrawEditor(output);
+        return InputResult::Continue;
+    }
+    if (character == '\x1B')
+    {
+        editorEscapeState = 1;
+        return InputResult::Continue;
+    }
     if (character == 0x0F || character == 0x13) { saveEditor(output); return InputResult::Continue; }
     if (character == 0x18) { closeEditor(output); return InputResult::Continue; }
     if (character == '\r' || character == '\n')
     {
-        if (editorLength < EditorCapacity) { editorBuffer[editorLength++] = '\n'; editorBuffer[editorLength] = '\0'; output.write("\r\n"); }
+        if (editorLength < EditorCapacity)
+        {
+            memmove(editorBuffer + editorCursor + 1, editorBuffer + editorCursor,
+                    editorLength - editorCursor + 1);
+            editorBuffer[editorCursor++] = '\n';
+            ++editorLength;
+            redrawEditor(output);
+        }
         return InputResult::Continue;
     }
     if (character == '\b' || character == 0x7F)
     {
-        if (editorLength > 0)
+        if (editorCursor > 0)
         {
-            const char removed = editorBuffer[--editorLength];
+            memmove(editorBuffer + editorCursor - 1, editorBuffer + editorCursor,
+                    editorLength - editorCursor + 1);
+            --editorCursor;
+            --editorLength;
             editorBuffer[editorLength] = '\0';
-            output.write(removed == '\n' ? "\x1b[A\x1b[K" : "\b \b");
+            redrawEditor(output);
         }
         return InputResult::Continue;
     }
     if (!isPrintable(static_cast<unsigned char>(character))) return InputResult::Continue;
     if (editorLength >= EditorCapacity) { output.write("\a"); return InputResult::Continue; }
-    editorBuffer[editorLength++] = character;
+    memmove(editorBuffer + editorCursor + 1, editorBuffer + editorCursor,
+            editorLength - editorCursor + 1);
+    editorBuffer[editorCursor++] = character;
+    ++editorLength;
     editorBuffer[editorLength] = '\0';
-    char text[2] = { character, '\0' };
-    output.write(text);
+    redrawEditor(output);
     return InputResult::Continue;
+}
+
+void SSHManager::moveEditorVertical(int direction)
+{
+    size_t lineStart = editorCursor;
+    while (lineStart > 0 && editorBuffer[lineStart - 1] != '\n') --lineStart;
+    const size_t column = editorCursor - lineStart;
+
+    if (direction < 0)
+    {
+        if (lineStart == 0) return;
+        const size_t previousEnd = lineStart - 1;
+        size_t previousStart = previousEnd;
+        while (previousStart > 0 && editorBuffer[previousStart - 1] != '\n') --previousStart;
+        const size_t previousLength = previousEnd - previousStart;
+        editorCursor = previousStart + (column < previousLength ? column : previousLength);
+    }
+    else
+    {
+        size_t currentEnd = editorCursor;
+        while (currentEnd < editorLength && editorBuffer[currentEnd] != '\n') ++currentEnd;
+        if (currentEnd == editorLength) return;
+        const size_t nextStart = currentEnd + 1;
+        size_t nextEnd = nextStart;
+        while (nextEnd < editorLength && editorBuffer[nextEnd] != '\n') ++nextEnd;
+        const size_t nextLength = nextEnd - nextStart;
+        editorCursor = nextStart + (column < nextLength ? column : nextLength);
+    }
+}
+
+void SSHManager::redrawEditor(SSHOutput& output, const char* status)
+{
+    output.write("\x1b[2J\x1b[H");
+    output.write("PocketBox nano - Ctrl+O save | Ctrl+X exit");
+    if (status) { output.write("  ["); output.write(status); output.write("]"); }
+    output.write("\r\n---\r\n");
+
+    char text[256];
+    size_t textLength = 0;
+    for (size_t i = 0; i < editorLength; ++i)
+    {
+        const size_t needed = editorBuffer[i] == '\n' ? 2U : 1U;
+        if (textLength + needed >= sizeof(text))
+        {
+            text[textLength] = '\0';
+            output.write(text);
+            textLength = 0;
+        }
+        if (editorBuffer[i] == '\n')
+        {
+            text[textLength++] = '\r';
+            text[textLength++] = '\n';
+        }
+        else text[textLength++] = editorBuffer[i];
+    }
+    if (textLength > 0) { text[textLength] = '\0'; output.write(text); }
+
+    size_t row = 3;
+    size_t column = 1;
+    for (size_t i = 0; i < editorCursor; ++i)
+    {
+        if (editorBuffer[i] == '\n') { ++row; column = 1; }
+        else ++column;
+    }
+    char position[32];
+    snprintf(position, sizeof(position), "\x1b[%u;%uH",
+             static_cast<unsigned>(row), static_cast<unsigned>(column));
+    output.write(position);
 }
 
 void SSHManager::writePrompt(SSHOutput& output)
