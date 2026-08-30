@@ -7,6 +7,10 @@
 namespace
 {
 constexpr uint32_t ClumsyTaskStackSize = 48U * 1024U;
+static_assert(ClumsyTaskStackSize % sizeof(StackType_t) == 0,
+              "ClumsyPL stack must align to StackType_t");
+StackType_t clumsyTaskStack[ClumsyTaskStackSize / sizeof(StackType_t)];
+StaticTask_t clumsyTaskControlBlock;
 
 struct ClumsyExecution
 {
@@ -64,7 +68,9 @@ void clumsyTaskEntry(void* parameter)
     runtime.setOutput(writeClumsyOutput, execution->output);
     execution->result = runtime.executeFile(SD, execution->path);
     xTaskNotifyGive(execution->waitingTask);
-    vTaskDelete(nullptr);
+    // The waiting SSH task deletes us. Suspending here ensures the static stack
+    // is no longer in use before it is reused by a later cpl command.
+    vTaskSuspend(nullptr);
 }
 }
 
@@ -749,16 +755,16 @@ void executeCpl(
     execution->waitingTask = xTaskGetCurrentTaskHandle();
     snprintf(execution->path, sizeof(execution->path), "%s", fullPath);
 
-    TaskHandle_t task = nullptr;
-    const BaseType_t created = xTaskCreate(
+    TaskHandle_t task = xTaskCreateStatic(
         clumsyTaskEntry,
         "ClumsyPL",
         ClumsyTaskStackSize,
         execution,
         2,
-        &task
+        clumsyTaskStack,
+        &clumsyTaskControlBlock
     );
-    if (created != pdPASS)
+    if (!task)
     {
         delete execution;
         output.write("cpl: cannot create interpreter task\r\n");
@@ -766,6 +772,7 @@ void executeCpl(
     }
 
     ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+    vTaskDelete(task);
     const clumsy::Result result = execution->result;
     delete execution;
 
