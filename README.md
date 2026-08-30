@@ -228,3 +228,34 @@ The list below is intentionally task-oriented so future contributors can select 
 ## Contributing
 
 Contributions are welcome. Pick an unchecked roadmap item, keep changes focused, and describe any required hardware in the pull request. For changes that affect hardware or networking, include the serial output and a short manual test procedure. Please avoid committing personal credentials, generated host keys, or SD-card contents.
+# ClumsyPL on PocketBox
+
+The ClumsyPL interpreter is embedded under `include/clumsyPL` and
+`src/clumsyPL`. It executes the same source language from either a string or an
+SD card file.
+
+```cpp
+#include <SD.h>
+#include "clumsyPL/ClumsyPL.hpp"
+
+clumsy::Runtime clumsyRuntime;
+
+void runExamples() {
+    clumsyRuntime.useSerialOutput();
+
+    clumsy::Result fromString = clumsyRuntime.execute("print(1 + 2);");
+    clumsy::Result fromSd = clumsyRuntime.executeFile(SD, "/PocketBox/demo.clmsypl");
+
+    if (!fromSd.ok()) {
+        Serial.printf("ClumsyPL %s at line %d: %s\n",
+            clumsy::statusText(fromSd.status), fromSd.line, fromSd.message);
+    }
+}
+```
+
+Device-specific functions are registered with `Runtime::addNative`. A native
+definition includes its semantic signature and runtime callback, so functions
+such as a future `draw(...)` are type-checked exactly like built-ins before
+execution.
+
+Run the host-side integration tests with `pio test -e native`.
