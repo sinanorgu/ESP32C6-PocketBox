@@ -58,6 +58,10 @@ private:
 
     void handleClient(ssh_session session, ssh_channel channel);
     InputResult processCharacter(char character, SSHOutput& output);
+    InputResult processEditorCharacter(char character, SSHOutput& output);
+    bool beginEditor(const char* path, SSHOutput& output);
+    bool saveEditor(SSHOutput& output);
+    void closeEditor(SSHOutput& output);
 
     void writePrompt(SSHOutput& output);
     bool ensureHostKey(const char* path);
@@ -77,6 +81,12 @@ private:
     char lineBuffer[256]{};
     size_t lineLength = 0;
 
+    static constexpr size_t EditorCapacity = 16U * 1024U;
+    char* editorBuffer = nullptr;
+    size_t editorLength = 0;
+    char editorPath[256]{};
+    bool editorActive = false;
+
     bool running = false;
 };
 
@@ -86,4 +96,3 @@ enum class EscapeState
     Escape,
     CSI
 };
-

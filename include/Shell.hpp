@@ -14,7 +14,8 @@ enum class ShellResult
     Continue,
     Exit,
     Reboot,
-    Shutdown
+    Shutdown,
+    OpenEditor
 };
 
 size_t split(char* str, char delimiter, char* tokens[], size_t maxTokens);
@@ -30,6 +31,9 @@ void executeMv(ShellOutput& output, const char* sourcePath, const char* destinat
 void executePwd(ShellOutput& output, const char* currentDirectory);
 void executeRmdir(ShellOutput& output, const char* path, const char* currentDirectory);
 void executeCpl(ShellOutput& output, const char* path, const char* currentDirectory);
+void executeEcho(ShellOutput& output, const char* command, const char* currentDirectory);
+bool prepareNano(ShellOutput& output, const char* path, const char* currentDirectory,
+                 char* resolvedPath, size_t resolvedPathSize);
 
 class Shell {
     public:
@@ -111,6 +115,14 @@ class Shell {
                 Serial.println("Executing cpl command...");
                 executeCpl(output, argc > 1 ? argv[1] : nullptr, workingDirectory);
             }
+            else if(strcmp(cmd,"echo") == 0) {
+                executeEcho(output, command, workingDirectory);
+            }
+            else if(strcmp(cmd,"nano") == 0) {
+                if (prepareNano(output, argc > 1 ? argv[1] : nullptr, workingDirectory,
+                                editorPath, sizeof(editorPath)))
+                    return ShellResult::OpenEditor;
+            }
             else {
                 Serial.print("Unknown command: ");
                 Serial.println(cmd);
@@ -122,10 +134,11 @@ class Shell {
         return ShellResult::Continue;
         }
         void autoComplete(char* lineBuffer, size_t& lineLength, size_t& cursorPosition, ShellOutput& output);
+        const char* requestedEditorPath() const { return editorPath; }
 
     
     private:
         FileSystemManager fileSystemManager;
+        char editorPath[256]{};
 
 };
-

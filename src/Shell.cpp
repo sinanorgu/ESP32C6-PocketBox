@@ -1,9 +1,21 @@
 #include "Shell.hpp"
 #include "clumsyPL/ClumsyPL.hpp"
 
+#include <new>
+
 
 namespace
 {
+constexpr uint32_t ClumsyTaskStackSize = 48U * 1024U;
+
+struct ClumsyExecution
+{
+    ShellOutput* output;
+    TaskHandle_t waitingTask;
+    char path[256];
+    clumsy::Result result;
+};
+
 void writeClumsyOutput(const char* text, void* userData)
 {
     if (!text || !userData)
@@ -43,6 +55,16 @@ void writeClumsyOutput(const char* text, void* userData)
         buffer[length] = '\0';
         output.write(buffer);
     }
+}
+
+void clumsyTaskEntry(void* parameter)
+{
+    ClumsyExecution* execution = static_cast<ClumsyExecution*>(parameter);
+    clumsy::Runtime runtime;
+    runtime.setOutput(writeClumsyOutput, execution->output);
+    execution->result = runtime.executeFile(SD, execution->path);
+    xTaskNotifyGive(execution->waitingTask);
+    vTaskDelete(nullptr);
 }
 }
 
@@ -717,9 +739,35 @@ void executeCpl(
         return;
     }
 
-    clumsy::Runtime runtime;
-    runtime.setOutput(writeClumsyOutput, &output);
-    const clumsy::Result result = runtime.executeFile(SD, fullPath);
+    ClumsyExecution* execution = new (std::nothrow) ClumsyExecution{};
+    if (!execution)
+    {
+        output.write("cpl: cannot allocate execution context\r\n");
+        return;
+    }
+    execution->output = &output;
+    execution->waitingTask = xTaskGetCurrentTaskHandle();
+    snprintf(execution->path, sizeof(execution->path), "%s", fullPath);
+
+    TaskHandle_t task = nullptr;
+    const BaseType_t created = xTaskCreate(
+        clumsyTaskEntry,
+        "ClumsyPL",
+        ClumsyTaskStackSize,
+        execution,
+        2,
+        &task
+    );
+    if (created != pdPASS)
+    {
+        delete execution;
+        output.write("cpl: cannot create interpreter task\r\n");
+        return;
+    }
+
+    ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+    const clumsy::Result result = execution->result;
+    delete execution;
 
     if (!result.ok())
     {
@@ -738,6 +786,89 @@ void executeCpl(
         }
         output.write(diagnostic);
     }
+}
+
+void executeEcho(
+    ShellOutput& output,
+    const char* command,
+    const char* currentDirectory)
+{
+    const char* text = command + 4;
+    while (*text == ' ') ++text;
+
+    char content[256];
+    snprintf(content, sizeof(content), "%s", text);
+    char* redirect = nullptr;
+    bool append = false;
+    char quote = '\0';
+
+    for (char* cursor = content; *cursor != '\0'; ++cursor)
+    {
+        if ((*cursor == '\'' || *cursor == '"') &&
+            (cursor == content || cursor[-1] != '\\'))
+            quote = quote == '\0' ? *cursor : (quote == *cursor ? '\0' : quote);
+        else if (*cursor == '>' && quote == '\0')
+        {
+            redirect = cursor;
+            append = cursor[1] == '>';
+            break;
+        }
+    }
+
+    if (!redirect)
+    {
+        output.write(content);
+        output.write("\r\n");
+        return;
+    }
+
+    *redirect = '\0';
+    char* path = redirect + (append ? 2 : 1);
+    while (*path == ' ') ++path;
+    if (*path == '\0') { output.write("echo: missing redirect path\r\n"); return; }
+
+    char* end = redirect;
+    while (end > content && end[-1] == ' ') --end;
+    *end = '\0';
+    size_t length = strlen(content);
+    if (length >= 2U && ((content[0] == '"' && content[length - 1] == '"') ||
+                        (content[0] == '\'' && content[length - 1] == '\'')))
+    {
+        memmove(content, content + 1, length - 2U);
+        content[length - 2U] = '\0';
+    }
+
+    char fullPath[256];
+    if (!resolvePath(currentDirectory, path, fullPath, sizeof(fullPath)))
+    { output.write("echo: path is too long\r\n"); return; }
+
+    if (!append && SD.exists(fullPath) && !SD.remove(fullPath))
+    { output.write("echo: cannot replace file: "); output.write(path); output.write("\r\n"); return; }
+    File file = SD.open(fullPath, append ? FILE_APPEND : FILE_WRITE);
+    if (!file) { output.write("echo: cannot open file: "); output.write(path); output.write("\r\n"); return; }
+    const size_t expected = strlen(content);
+    const bool ok = file.write(reinterpret_cast<const uint8_t*>(content), expected) == expected &&
+                    file.write(static_cast<uint8_t>('\n')) == 1U;
+    file.close();
+    if (!ok) output.write("echo: write failed\r\n");
+}
+
+bool prepareNano(
+    ShellOutput& output,
+    const char* path,
+    const char* currentDirectory,
+    char* resolvedPath,
+    size_t resolvedPathSize)
+{
+    if (!path || path[0] == '\0')
+    { output.write("nano: missing argument\r\nusage: nano <path>\r\n"); return false; }
+    if (!resolvePath(currentDirectory, path, resolvedPath, resolvedPathSize))
+    { output.write("nano: path is too long\r\n"); return false; }
+    File existing = SD.open(resolvedPath, FILE_READ);
+    if (existing && existing.isDirectory())
+    { existing.close(); output.write("nano: is a directory\r\n"); return false; }
+    if (existing) existing.close();
+    return true;
 }
 
 void Shell::autoComplete(

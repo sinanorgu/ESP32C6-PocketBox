@@ -61,6 +61,8 @@ ESP32-C6 PocketBox is an experimental, pocket-sized application platform built a
   - `cd <path>` — change directory.
   - `pwd` — print the current directory.
   - `cat <file>` — print a file.
+  - `echo <text>` — print text; use `>` to overwrite or `>>` to append to an SD file.
+  - `nano <path>` — edit an SD file over SSH (`Ctrl+O` saves, `Ctrl+X` exits; 16 KiB limit).
   - `cpl <path>` — execute a ClumsyPL source file from the SD card.
   - `touch <file>` — create a file.
   - `mkdir <directory>` — create a directory.

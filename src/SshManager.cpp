@@ -399,6 +399,9 @@ InputResult SSHManager::processCharacter(
     char character,
     SSHOutput& output)
 {
+    if (editorActive)
+        return processEditorCharacter(character, output);
+
     if (escapeState == EscapeState::Escape)
     {
         escapeState =
@@ -468,6 +471,12 @@ InputResult SSHManager::processCharacter(
         if (result == ShellResult::Exit)
             return InputResult::ExitSession;
 
+        if (result == ShellResult::OpenEditor)
+        {
+            beginEditor(shell.requestedEditorPath(), output);
+            return InputResult::Continue;
+        }
+
         writePrompt(output);
 
         return InputResult::Continue;
@@ -484,7 +493,6 @@ InputResult SSHManager::processCharacter(
 
     return InputResult::Continue;
 }
-
 
     if (character == '\b' || character == 0x7F)
     {
@@ -552,6 +560,92 @@ InputResult SSHManager::processCharacter(
     for (size_t i = 0; i < moveBack; ++i)
         output.write("\b");
 
+    return InputResult::Continue;
+}
+
+bool SSHManager::beginEditor(const char* path, SSHOutput& output)
+{
+    free(editorBuffer);
+    editorBuffer = static_cast<char*>(malloc(EditorCapacity + 1U));
+    if (!editorBuffer) { output.write("nano: out of memory\r\n"); writePrompt(output); return false; }
+    snprintf(editorPath, sizeof(editorPath), "%s", path);
+    editorLength = 0;
+    File file = SD.open(editorPath, FILE_READ);
+    if (file)
+    {
+        if (file.size() > EditorCapacity)
+        { file.close(); free(editorBuffer); editorBuffer = nullptr; output.write("nano: file exceeds 16 KiB\r\n"); writePrompt(output); return false; }
+        editorLength = file.readBytes(editorBuffer, file.size());
+        file.close();
+    }
+    editorBuffer[editorLength] = '\0';
+    editorActive = true;
+    output.clear();
+    output.write("PocketBox nano - Ctrl+O save | Ctrl+X exit\r\n---\r\n");
+    char character[2] = {'\0', '\0'};
+    for (size_t i = 0; i < editorLength; ++i)
+    {
+        if (editorBuffer[i] == '\n') output.write("\r\n");
+        else { character[0] = editorBuffer[i]; output.write(character); }
+    }
+    return true;
+}
+
+bool SSHManager::saveEditor(SSHOutput& output)
+{
+    char temporaryPath[272];
+    const int written = snprintf(temporaryPath, sizeof(temporaryPath), "%s.nano.tmp", editorPath);
+    if (written < 0 || static_cast<size_t>(written) >= sizeof(temporaryPath))
+    { output.write("\r\n[nano: path is too long]\r\n"); return false; }
+    if (SD.exists(temporaryPath)) SD.remove(temporaryPath);
+    File file = SD.open(temporaryPath, FILE_WRITE);
+    if (!file) { output.write("\r\n[nano: save failed]\r\n"); return false; }
+    const bool ok = file.write(reinterpret_cast<const uint8_t*>(editorBuffer), editorLength) == editorLength;
+    file.close();
+    if (!ok) { SD.remove(temporaryPath); output.write("\r\n[nano: save failed]\r\n"); return false; }
+    if (SD.exists(editorPath) && !SD.remove(editorPath))
+    { output.write("\r\n[nano: cannot replace file; data kept in .nano.tmp]\r\n"); return false; }
+    if (!SD.rename(temporaryPath, editorPath))
+    { output.write("\r\n[nano: rename failed; data kept in .nano.tmp]\r\n"); return false; }
+    output.write("\r\n[nano: saved]\r\n");
+    return true;
+}
+
+void SSHManager::closeEditor(SSHOutput& output)
+{
+    editorActive = false;
+    free(editorBuffer);
+    editorBuffer = nullptr;
+    editorLength = 0;
+    output.write("\r\n[nano: closed]\r\n");
+    writePrompt(output);
+}
+
+InputResult SSHManager::processEditorCharacter(char character, SSHOutput& output)
+{
+    if (character == 0x0F || character == 0x13) { saveEditor(output); return InputResult::Continue; }
+    if (character == 0x18) { closeEditor(output); return InputResult::Continue; }
+    if (character == '\r' || character == '\n')
+    {
+        if (editorLength < EditorCapacity) { editorBuffer[editorLength++] = '\n'; editorBuffer[editorLength] = '\0'; output.write("\r\n"); }
+        return InputResult::Continue;
+    }
+    if (character == '\b' || character == 0x7F)
+    {
+        if (editorLength > 0)
+        {
+            const char removed = editorBuffer[--editorLength];
+            editorBuffer[editorLength] = '\0';
+            output.write(removed == '\n' ? "\x1b[A\x1b[K" : "\b \b");
+        }
+        return InputResult::Continue;
+    }
+    if (!isPrintable(static_cast<unsigned char>(character))) return InputResult::Continue;
+    if (editorLength >= EditorCapacity) { output.write("\a"); return InputResult::Continue; }
+    editorBuffer[editorLength++] = character;
+    editorBuffer[editorLength] = '\0';
+    char text[2] = { character, '\0' };
+    output.write(text);
     return InputResult::Continue;
 }
 
