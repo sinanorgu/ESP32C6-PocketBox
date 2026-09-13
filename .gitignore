@@ -5,3 +5,4 @@
 .vscode
 .Ds_Store
 sdkconfig.*
+*.code-workspace
