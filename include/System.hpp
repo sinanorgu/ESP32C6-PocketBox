@@ -62,14 +62,6 @@ class Interface {
             dirtyFlags.ble = 1;
             drawInfoPanel(0, 0); // Redraw the info panel to reflect the change
         }
-        void setWifiConnectionStatus(bool status) {
-            dirtyFlags.wifi = 1;
-            drawInfoPanel(0, 0); // Redraw the info panel to reflect the change
-        }
-        void setSdCardStatus(bool status) {
-            dirtyFlags.sdCard = 1;
-            drawInfoPanel(0, 0); // Redraw the info panel to reflect the change
-        }
 };
 
 
@@ -83,7 +75,7 @@ class System{
         Arduino_GFX *gfx;
 
         bool isSDCardInserted = false;
-        bool isWifiConnected = false;
+        WifiConnectionState wifiStatus = WifiConnectionState::Disconnected;
         bool isBleConnected = false;
         bool isSshBegin = false;
 
@@ -109,8 +101,8 @@ class System{
             isBleConnected = status;
             interface.drawInfoPanel(0, 0); // Redraw the info panel to reflect the change
         }
-        void setWifiConnectionStatus(bool status) {
-            isWifiConnected = status;
+        void setWifiConnectionStatus(WifiConnectionState status) {
+            wifiStatus = status;
             interface.drawInfoPanel(0, 0); // Redraw the info panel to reflect the change
         }
         void setSdCardStatus(bool status) {

@@ -100,7 +100,7 @@ void Interface::drawInfoPanel(int16_t x, int16_t y){
     gfx->fillRect(x, y, TFT_HEIGHT, infoPanelHeight, RGB565_DARKGREY);
     gfx->drawRect(x, y, TFT_HEIGHT, infoPanelHeight, RGB565_WHITE);
     
-    bool isWifiConnected = System::getInstance().isWifiConnected;
+    WifiConnectionState wifiStatus = System::getInstance().wifiStatus;
     bool isBleConnected = System::getInstance().isBleConnected; 
     bool isSDCardInserted = System::getInstance().isSDCardInserted;
     bool isSshBegin = System::getInstance().isSshBegin;
@@ -108,7 +108,16 @@ void Interface::drawInfoPanel(int16_t x, int16_t y){
     // Draw the Wi-Fi icon
     {
         int start_angle = -140, end_angle = -40; 
-        int color = isWifiConnected ? RGB565(0, 255, 0) : RGB565(255, 0, 0);
+        int color = RGB565(255, 0, 0);
+        if (wifiStatus == WifiConnectionState::Connected)
+        {
+            color = RGB565(0, 255, 0);
+        }
+        else if (wifiStatus == WifiConnectionState::Scanning ||
+                 wifiStatus == WifiConnectionState::Connecting)
+        {
+            color = RGB565(0, 0, 0);;
+        }
         int offsetX = 20, offsetY = infoPanelHeight-3;
         gfx->fillArc(x+offsetX, y+offsetY, 15, 13, start_angle, end_angle, color);
         gfx->fillArc(x+offsetX, y+offsetY, 10, 8,  start_angle, end_angle, color);

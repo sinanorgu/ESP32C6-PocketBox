@@ -121,6 +121,7 @@ void setup()
 
 
     System::getInstance().wifiManager.loadKnownNetworks();
+    System::getInstance().wifiManager.startAutoConnectTask();
 
 
     digitalWrite(SD_CS_PIN, HIGH);

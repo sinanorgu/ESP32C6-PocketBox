@@ -73,3 +73,13 @@ static constexpr int16_t SCREEN_MARGIN_X = 4;
 static constexpr int16_t HEADER_Y        = 5;
 static constexpr int16_t CONTENT_START_Y = 30;
 static constexpr int16_t LINE_HEIGHT     = 14;
+
+
+
+//=========================================
+// SSH params
+//=========================================
+#define SSH_USERNAME "admin"
+#define SSH_PASSWORD "admin"
+#define SSH_KEY_FILE_PATH "/PocketBox/System/ssh_host_ed25519_key"
+#define SSH_PORT 22

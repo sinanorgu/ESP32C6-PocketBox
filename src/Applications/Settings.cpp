@@ -62,11 +62,11 @@ void connectToWiFiCallback(void* params) {
             bool connected = System::getInstance().wifiManager.connectToWiFi(ssid, password);
             if (connected) {
                 Serial.println("Connected to Wi-Fi successfully!");
-                System::getInstance().setWifiConnectionStatus(true);
+                System::getInstance().setWifiConnectionStatus(WifiConnectionState::Connected);
                 System::getInstance().wifiManager.saveNetwork(ssid, password, true, false, 100);
                 System::getInstance().gfx->setCursor(menuX, menuY+36);
                 System::getInstance().gfx->printf("\nConnected to %s", ssid);
-                System::getInstance().sshManager->begin("admin", "admin", "/PocketBox/System/ssh_host_ed25519_key", 22);
+                System::getInstance().sshManager->begin(SSH_USERNAME, SSH_PASSWORD, SSH_KEY_FILE_PATH, SSH_PORT);
             } else {
                 Serial.println("Failed to connect to Wi-Fi.");  
                 System::getInstance().gfx->printf("\nFailed to connect to %s", ssid);
@@ -96,8 +96,8 @@ void connectToKnownWiFi(void* params){
     bool is_connected = System::getInstance().wifiManager.connectToKnownWiFi(ssid);
     if(is_connected){
         Serial.printf("Connected to known Wi-Fi network: %s\n", ssid);
-        System::getInstance().setWifiConnectionStatus(true);
-        System::getInstance().sshManager->begin("admin", "admin", "/PocketBox/System/ssh_host_ed25519_key", 22);
+        System::getInstance().setWifiConnectionStatus(WifiConnectionState::Connected);
+        System::getInstance().sshManager->begin(SSH_USERNAME, SSH_PASSWORD, SSH_KEY_FILE_PATH, SSH_PORT);
     } else {
         Serial.printf("Failed to connect to known Wi-Fi network: %s\n", ssid);
     }

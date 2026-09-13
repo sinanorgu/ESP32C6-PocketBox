@@ -117,6 +117,13 @@ void WifiManager::scanWifiNetworks()
 
 std::vector<String>& WifiManager::getAvailableNetworks()
 {
+    if (connectionMutex == nullptr ||
+        xSemaphoreTake(connectionMutex, portMAX_DELAY) != pdTRUE)
+    {
+        return availableNetworks;
+    }
+
+    System::getInstance().setWifiConnectionStatus(WifiConnectionState::Scanning);
     availableNetworks.clear();
     WiFi.mode(WIFI_STA);
     WiFi.disconnect(false, false);
@@ -125,12 +132,16 @@ std::vector<String>& WifiManager::getAvailableNetworks()
 
     if (networkCount == WIFI_SCAN_FAILED) {
         Serial.println("Wi-Fi taramasi basarisiz.");
+        System::getInstance().setWifiConnectionStatus(WifiConnectionState::Disconnected);
+        xSemaphoreGive(connectionMutex);
         return availableNetworks;
     }
 
     if (networkCount == 0) {
         Serial.println("Hicbir Wi-Fi agi bulunamadi.");
         WiFi.scanDelete();
+        System::getInstance().setWifiConnectionStatus(WifiConnectionState::Disconnected);
+        xSemaphoreGive(connectionMutex);
         return availableNetworks;
     }
 
@@ -144,6 +155,8 @@ std::vector<String>& WifiManager::getAvailableNetworks()
         availableNetworks.push_back(ssid);
     }
     WiFi.scanDelete();
+    System::getInstance().setWifiConnectionStatus(WifiConnectionState::Disconnected);
+    xSemaphoreGive(connectionMutex);
 
     return availableNetworks;
 }
@@ -154,12 +167,29 @@ bool WifiManager::connectToWiFi(
     const char* password
 )
 {
+    if (connectionMutex == nullptr ||
+        xSemaphoreTake(connectionMutex, portMAX_DELAY) != pdTRUE)
+    {
+        return false;
+    }
+
+    const bool result = connectToWiFiLocked(ssid, password);
+    xSemaphoreGive(connectionMutex);
+    return result;
+}
+
+bool WifiManager::connectToWiFiLocked(
+    const char* ssid,
+    const char* password
+)
+{
     if (ssid == nullptr || ssid[0] == '\0') {
         Serial.println("Gecersiz SSID.");
         return false;
     }
 
     Serial.printf("Wi-Fi agina baglaniliyor: %s\n", ssid);
+    System::getInstance().setWifiConnectionStatus(WifiConnectionState::Connecting);
 
     WiFi.mode(WIFI_STA);
 
@@ -180,6 +210,7 @@ bool WifiManager::connectToWiFi(
             Serial.println("Wi-Fi baglanti zaman asimi.");
 
             WiFi.disconnect(false, false);
+            System::getInstance().setWifiConnectionStatus(WifiConnectionState::Disconnected);
             return false;
         }
 
@@ -219,6 +250,9 @@ bool WifiManager::connectToWiFi(
         "MAC        : %s\n",
         WiFi.macAddress().c_str()
     );
+
+    System::getInstance().setWifiConnectionStatus(WifiConnectionState::Connected);
+    markLastConnectedNetwork(ssid);
 
     return true;
 }
@@ -294,6 +328,9 @@ bool WifiManager::loadKnownNetworks()
         int priority =
             networkObject["priority"] | 0;
 
+        bool lastConnected =
+            networkObject["lastConnected"] | false;
+
         if (ssid[0] == '\0')
         {
             Serial.println(
@@ -306,7 +343,8 @@ bool WifiManager::loadKnownNetworks()
             password,
             autoConnect,
             hidden,
-            priority);
+            priority,
+            lastConnected);
     }
 
     Serial.printf(
@@ -344,6 +382,9 @@ bool WifiManager::saveKnownNetworks()
 
         networkObject["priority"] =
             network.priority;
+
+        networkObject["lastConnected"] =
+            network.lastConnected;
     }
 
     SD.remove(TEMP_FILE);
@@ -393,9 +434,16 @@ bool WifiManager::saveNetwork(
     bool hidden,
     int priority)
 {
+    if (connectionMutex == nullptr ||
+        xSemaphoreTake(connectionMutex, portMAX_DELAY) != pdTRUE)
+    {
+        return false;
+    }
+
     if (!ssid || ssid[0] == '\0')
     {
         Serial.println("SSID cannot be empty");
+        xSemaphoreGive(connectionMutex);
         return false;
     }
 
@@ -429,20 +477,36 @@ bool WifiManager::saveNetwork(
             priority);
     }
 
+    for (WifiNetwork& network : knownNetworks)
+    {
+        network.lastConnected = network.ssid == ssid;
+    }
+
     if (!saveKnownNetworks())
     {
         Serial.println(
             "Failed to save known networks");
+        xSemaphoreGive(connectionMutex);
         return false;
     }
 
+    xSemaphoreGive(connectionMutex);
     return true;
 }
 
 bool WifiManager::removeNetwork(const char* ssid)
 {
-    if (!ssid || ssid[0] == '\0')
+    if (connectionMutex == nullptr ||
+        xSemaphoreTake(connectionMutex, portMAX_DELAY) != pdTRUE)
+    {
         return false;
+    }
+
+    if (!ssid || ssid[0] == '\0')
+    {
+        xSemaphoreGive(connectionMutex);
+        return false;
+    }
 
     for (auto iterator = knownNetworks.begin();
          iterator != knownNetworks.end();
@@ -451,15 +515,31 @@ bool WifiManager::removeNetwork(const char* ssid)
         if (iterator->ssid == ssid)
         {
             knownNetworks.erase(iterator);
-            return saveKnownNetworks();
+            const bool result = saveKnownNetworks();
+            xSemaphoreGive(connectionMutex);
+            return result;
         }
     }
 
+    xSemaphoreGive(connectionMutex);
     return false;
 }
 
 
 bool WifiManager::connectToKnownWiFi(const char* ssid)
+{
+    if (connectionMutex == nullptr ||
+        xSemaphoreTake(connectionMutex, portMAX_DELAY) != pdTRUE)
+    {
+        return false;
+    }
+
+    const bool result = connectToKnownWiFiLocked(ssid);
+    xSemaphoreGive(connectionMutex);
+    return result;
+}
+
+bool WifiManager::connectToKnownWiFiLocked(const char* ssid)
 {
     WifiNetwork* network = findKnownNetwork(ssid);
 
@@ -471,9 +551,119 @@ bool WifiManager::connectToKnownWiFi(const char* ssid)
         return false;
     }
 
-    return connectToWiFi(
+    return connectToWiFiLocked(
         network->ssid.c_str(),
         network->password.c_str());
+}
+
+void WifiManager::markLastConnectedNetwork(const char* ssid)
+{
+    bool changed = false;
+
+    for (WifiNetwork& network : knownNetworks)
+    {
+        const bool shouldBeLast = network.ssid == ssid;
+        if (network.lastConnected != shouldBeLast)
+        {
+            network.lastConnected = shouldBeLast;
+            changed = true;
+        }
+    }
+
+    if (changed)
+    {
+        saveKnownNetworks();
+    }
+}
+
+void WifiManager::startAutoConnectTask()
+{
+    if (connectionMutex == nullptr ||
+        xSemaphoreTake(connectionMutex, portMAX_DELAY) != pdTRUE)
+    {
+        return;
+    }
+
+    if (!autoConnectTaskRunning)
+    {
+        autoConnectTaskRunning = true;
+        if (xTaskCreate(
+                WifiManager::autoConnectTaskEntry,
+                "wifi_autoconnect",
+                4096,
+                this,
+                1,
+                &autoConnectTaskHandle) != pdPASS)
+        {
+            autoConnectTaskRunning = false;
+            Serial.println("Wi-Fi auto-connect task baslatilamadi.");
+        }
+    }
+
+    xSemaphoreGive(connectionMutex);
+}
+
+void WifiManager::autoConnectTaskEntry(void* parameter)
+{
+    static_cast<WifiManager*>(parameter)->autoConnectTaskLoop();
+    vTaskDelete(nullptr);
+}
+
+void WifiManager::autoConnectTaskLoop()
+{
+    while (true)
+    {
+        if (WiFi.status() == WL_CONNECTED)
+        {
+            break;
+        }
+
+        if (connectionMutex != nullptr &&
+            xSemaphoreTake(connectionMutex, portMAX_DELAY) == pdTRUE)
+        {
+            // A manual connection may have completed while this task slept.
+            if (WiFi.status() != WL_CONNECTED)
+            {
+                WifiNetwork* lastNetwork = nullptr;
+                for (WifiNetwork& network : knownNetworks)
+                {
+                    if (network.lastConnected && network.autoConnect)
+                    {
+                        lastNetwork = &network;
+                        break;
+                    }
+                }
+
+                if (lastNetwork != nullptr)
+                {
+                    connectToWiFiLocked(
+                        lastNetwork->ssid.c_str(),
+                        lastNetwork->password.c_str());
+                }
+                else
+                {
+                    System::getInstance().setWifiConnectionStatus(WifiConnectionState::Disconnected);
+                }
+            }
+
+            xSemaphoreGive(connectionMutex);
+        }
+
+        if (WiFi.status() == WL_CONNECTED)
+        {
+            break;
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(WIFI_AUTOCONNECT_PERIOD_MS));
+    }
+
+    if (connectionMutex != nullptr &&
+        xSemaphoreTake(connectionMutex, portMAX_DELAY) == pdTRUE)
+    {
+        autoConnectTaskRunning = false;
+        autoConnectTaskHandle = nullptr;
+        xSemaphoreGive(connectionMutex);
+    }
 }
 
 
@@ -483,18 +673,21 @@ void WifiManager::onWiFiEvent(arduino_event_id_t event)
     {
         case ARDUINO_EVENT_WIFI_STA_CONNECTED:
             Serial.println("Connected to AP");
-            System::getInstance().setWifiConnectionStatus(true);
+            System::getInstance().setWifiConnectionStatus(WifiConnectionState::Connecting);
             break;
 
         case ARDUINO_EVENT_WIFI_STA_GOT_IP:
             Serial.println("Got IP");
+            System::getInstance().setWifiConnectionStatus(WifiConnectionState::Connected);
             // EventManager.publish(WifiConnectedEvent{});
+            System::getInstance().sshManager->begin(SSH_USERNAME, SSH_PASSWORD, SSH_KEY_FILE_PATH, SSH_PORT);
             break;
 
         case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
             Serial.println("Disconnected");
             // EventManager.publish(WifiDisconnectedEvent{});
-            System::getInstance().setWifiConnectionStatus(false);
+            System::getInstance().setWifiConnectionStatus(WifiConnectionState::Disconnected);
+            System::getInstance().wifiManager.startAutoConnectTask();
             break;
 
         default:
