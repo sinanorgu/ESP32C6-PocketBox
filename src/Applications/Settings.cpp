@@ -85,31 +85,70 @@ void connectToWiFiCallback(void* params) {
 }
 
 
-void connectToKnonwnWiFiCallback(void* params){
-    delay(200);
-    char* ssid = static_cast<char*>(params);
-    int16_t menuX = 0;
-    int16_t menuY = System::getInstance().interface.infoPanelHeight + System::getInstance().interface.margin;
-    int16_t menuWidth = TFT_HEIGHT;
-    int16_t menuHeight = TFT_WIDTH - menuY;
-    System::getInstance().gfx->fillRect(menuX, menuY, menuWidth, menuHeight, COLOR_BACKGROUND);
-    System::getInstance().gfx->setCursor(menuX, menuY);
-    System::getInstance().gfx->setTextSize(2);
-    System::getInstance().gfx->setTextColor(RGB565_WHITE);
-    System::getInstance().gfx->printf("Connecting to %s: ", ssid);
+struct KnownNetworkMenuContext {
+    String ssid;
+    bool deleted = false;
+};
+
+void connectToKnownWiFi(void* params){
+    KnownNetworkMenuContext* context = static_cast<KnownNetworkMenuContext*>(params);
+    const char* ssid = context->ssid.c_str();
     bool is_connected = System::getInstance().wifiManager.connectToKnownWiFi(ssid);
     if(is_connected){
         Serial.printf("Connected to known Wi-Fi network: %s\n", ssid);
         System::getInstance().setWifiConnectionStatus(true);
-        System::getInstance().gfx->setCursor(menuX, menuY+36);
-        System::getInstance().gfx->printf("\nConnected to %s", ssid);
         System::getInstance().sshManager->begin("admin", "admin", "/PocketBox/System/ssh_host_ed25519_key", 22);
-        
-
     } else {
         Serial.printf("Failed to connect to known Wi-Fi network: %s\n", ssid);
-        System::getInstance().gfx->setCursor(menuX, menuY+36);
-        System::getInstance().gfx->printf("\nFailed to connect to %s", ssid);
+    }
+}
+
+void deleteKnownWiFi(void* params){
+    KnownNetworkMenuContext* context = static_cast<KnownNetworkMenuContext*>(params);
+    const char* ssid = context->ssid.c_str();
+    if(System::getInstance().wifiManager.removeNetwork(ssid)){
+        context->deleted = true;
+        Serial.printf("Deleted known Wi-Fi network: %s\n", ssid);
+    } else {
+        Serial.printf("Failed to delete known Wi-Fi network: %s\n", ssid);
+    }
+}
+
+void connectToKnonwnWiFiCallback(void* params){
+    delay(200);
+    KnownNetworkMenuContext context{static_cast<const char*>(params)};
+    int16_t menuX = 0;
+    int16_t menuY = System::getInstance().interface.infoPanelHeight + System::getInstance().interface.margin;
+    int16_t menuWidth = TFT_HEIGHT;
+    int16_t menuHeight = TFT_WIDTH - menuY;
+    ListMenu networkMenu;
+    networkMenu.setGraphics(menuX, menuY, menuWidth, menuHeight);
+    networkMenu.setHeader(context.ssid);
+    networkMenu.addtoList("Connect", connectToKnownWiFi, &context);
+    networkMenu.addtoList("Delete", deleteKnownWiFi, &context);
+
+    while (true) {
+        networkMenu.draw();
+        if(digitalRead(BUTTON_DOWN_PIN) == LOW){
+            networkMenu.incrementIndex();
+            delay(200);
+        }
+        if(digitalRead(BUTTON_UP_PIN) == LOW){
+            networkMenu.decrementIndex();
+            delay(200);
+        }
+        if(digitalRead(BUTTON_RIGHT_PIN) == LOW){
+            networkMenu.runSelectedItem();
+            delay(200);
+            networkMenu.changed = true;
+            if(context.deleted){
+                break;
+            }
+        }
+        if(digitalRead(BUTTON_LEFT_PIN) == LOW){
+            delay(200);
+            break;
+        }
     }
 }
 
@@ -244,8 +283,8 @@ void wifiSettingsCallback(void* params) {
 
     wifiMenu.setGraphics(menuX, menuY, menuWidth, menuHeight);
 
-    wifiMenu.addtoList("Scan Networks", scanNetworkCallback);
     wifiMenu.addtoList("Known Networks", knownNetworksCallback);
+    wifiMenu.addtoList("Scan Networks", scanNetworkCallback);
 
     delay(300);
     while (true) {

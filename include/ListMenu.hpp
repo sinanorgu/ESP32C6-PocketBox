@@ -16,7 +16,12 @@ public:
 class ListMenu {
 
     public:
-        ListMenu() : innerIndex(0), offset(0), changed(true), itemCount(0), maxVisibleItems(0), textSize(2) {};
+        ListMenu() : innerIndex(0), offset(0), changed(true), itemCount(0), maxVisibleItems(0), textSize(2), textHeight(0), headerHeight(0) {};
+        void setHeader(const String& header){
+            this->header = header;
+            headerHeight = header.length() > 0 ? textHeight : 0;
+            changed = true;
+        }
         void draw() {
             if(System::getInstance().gfx == nullptr || changed == false){
 
@@ -24,20 +29,24 @@ class ListMenu {
             }
             Serial.printf("reached line:%d in file %s\n", __LINE__, __FILE__);
             System::getInstance().gfx->fillRect(x, y, width, height, COLOR_BACKGROUND);
-            System::getInstance().gfx->setCursor(x + 5, y + 5);
             System::getInstance().gfx->setTextSize(textSize);
-            System::getInstance().gfx->setTextColor(RGB565_WHITE);
+            if(header.length() > 0){
+                System::getInstance().gfx->fillRect(x + 2, y + 2, width - 4, textHeight, RGB565_DARKGREY);
+                System::getInstance().gfx->setCursor(x + 5, y + 5);
+                System::getInstance().gfx->setTextColor(RGB565_YELLOW);
+                System::getInstance().gfx->print(header);
+            }
 
             for(int i = 0; i < maxVisibleItems && i < itemCount; i++){
                 int itemIndex = offset + i;
                 if(itemIndex < 64 && items[itemIndex]->name.length() > 0){
                     if(i == innerIndex){
-                        System::getInstance().gfx->fillRect(x + 2, y + 2 + i * textHeight, width - 4, textHeight, RGB565_CYAN);
+                        System::getInstance().gfx->fillRect(x + 2, y + 2 + headerHeight + i * textHeight, width - 4, textHeight, RGB565_CYAN);
                         System::getInstance().gfx->setTextColor(RGB565_BLACK);
                     } else {
                         System::getInstance().gfx->setTextColor(RGB565_WHITE);
                     }
-                    System::getInstance().gfx->setCursor(x + 5, y + 5 + i * textHeight);
+                    System::getInstance().gfx->setCursor(x + 5, y + 5 + headerHeight + i * textHeight);
                     System::getInstance().gfx->print(items[itemIndex]->name);
                 }
             }
@@ -91,7 +100,8 @@ class ListMenu {
 
             Serial.printf("reached line:%d\n", __LINE__);
             this->textHeight = 8 * textSize+4; // Assuming a base height of 8 pixels for text size 1
-            this->maxVisibleItems = height / textHeight;
+            this->headerHeight = header.length() > 0 ? textHeight : 0;
+            this->maxVisibleItems = (height - headerHeight) / textHeight;
             
         }
     
@@ -109,4 +119,6 @@ class ListMenu {
         int16_t height;
         uint8_t textSize;
         uint16_t textHeight;
+        String header;
+        uint16_t headerHeight;
     };
