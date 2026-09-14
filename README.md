@@ -22,7 +22,8 @@ ESP32-C6 PocketBox is an experimental, pocket-sized application platform built a
 - Status panel with Wi-Fi, BLE, and SD-card indicators.
 - Scrollable reusable list-menu component.
 - Fixed-capacity text-box widget with text input and backspace handling.
-- Settings application with Wi-Fi network scanning and an on-screen SSID list.
+- Settings application with Wi-Fi network scanning, known-network management, and a Network information screen.
+- Network information screen with connection status, SSID, IP address, netmask, gateway, DNS, MAC address, RSSI, and channel details.
 - Keyboard Test application that displays text received through the event system.
 - Shell application prototype with an on-screen prompt and text entry.
 - Mock, Reader, Camera, and Music application icons for UI and launcher development.
@@ -48,6 +49,10 @@ ESP32-C6 PocketBox is an experimental, pocket-sized application platform built a
 - Synchronous network scanning, including hidden networks.
 - Scan diagnostics for RSSI, channel, and security type over serial.
 - Wi-Fi connection with a 15-second timeout and connection diagnostics.
+- Wi-Fi connection states for disconnected, scanning, connecting, and connected status display.
+- Background auto-reconnection task that retries only the last connected network when it is marked for automatic connection.
+- Mutex-protected Wi-Fi connection, scanning, and network-configuration operations.
+- Known networks persisted in `networks.json`, including the `lastConnected` marker used for automatic reconnection.
 - BLE GATT server advertised as `ESP32C6 PocketBox`.
 - Custom read/write/notify keyboard characteristic for receiving 32-bit Unicode code points.
 - BLE connection callbacks, automatic advertising restart after disconnect, and UI status updates.
@@ -60,6 +65,7 @@ ESP32-C6 PocketBox is an experimental, pocket-sized application platform built a
   - `ls` — list the current directory.
   - `cd <path>` — change directory.
   - `pwd` — print the current directory.
+  - `ifconfig` — print Wi-Fi status, SSID, IP configuration, MAC address, RSSI, and channel.
   - `cat <file>` — print a file.
   - `echo <text>` — print text; use `>` to overwrite or `>>` to append to an SD file.
   - `nano <path>` — edit an SD file over SSH (`Ctrl+O` saves, `Ctrl+X` exits; 16 KiB limit).
@@ -152,8 +158,9 @@ The SSH host key is generated on first use and stored at `/PocketBox/System/ssh_
 
 - Wi-Fi SSID/password and SSH username/password are hard-coded in `src/main.cpp`; there is no provisioning flow or secure credential storage.
 - The initial SD configuration stores a username and password as plain-text JSON.
-- Wi-Fi state is not fully synchronized with the system status model, and reconnect/disconnect handling is not implemented.
-- Settings can scan and display SSIDs, but cannot select a network, enter a password, save it, or connect from the UI.
+- Automatic reconnection retries only the last connected network when its `autoConnect` value is true; there is no fallback rotation through other saved networks.
+- Wi-Fi scanning and connection operations are serialized, but the scan is synchronous and can temporarily block the Settings UI.
+- Settings can scan and display SSIDs, connect to a scanned network, manage known networks, and display current Network details; provisioning is still limited to the existing password-entry flow.
 - Display Settings and System Info entries are placeholders.
 - The on-device Shell application accepts text but does not execute the entered command or render command output yet.
 - The SSH banner mentions `help`, but a `help` command is not implemented.
