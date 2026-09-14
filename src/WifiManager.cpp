@@ -126,8 +126,6 @@ std::vector<String>& WifiManager::getAvailableNetworks()
     System::getInstance().setWifiConnectionStatus(WifiConnectionState::Scanning);
     availableNetworks.clear();
     WiFi.mode(WIFI_STA);
-    WiFi.disconnect(false, false);
-    delay(100);
     const int16_t networkCount = WiFi.scanNetworks(false, true);
 
     if (networkCount == WIFI_SCAN_FAILED) {
@@ -155,7 +153,10 @@ std::vector<String>& WifiManager::getAvailableNetworks()
         availableNetworks.push_back(ssid);
     }
     WiFi.scanDelete();
-    System::getInstance().setWifiConnectionStatus(WifiConnectionState::Disconnected);
+    System::getInstance().setWifiConnectionStatus(
+        WiFi.status() == WL_CONNECTED
+            ? WifiConnectionState::Connected
+            : WifiConnectionState::Disconnected);
     xSemaphoreGive(connectionMutex);
 
     return availableNetworks;
