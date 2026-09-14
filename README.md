@@ -205,6 +205,8 @@ The list below is intentionally task-oriented so future contributors can select 
 - [ ] Implement a real clock using NTP, with timezone configuration and offline fallback.
 - [ ] Complete Wi-Fi, display, and system-information settings pages.
 - [ ] Add reusable dialogs, notifications, an on-screen keyboard, and error screens.
+- [ ] Add screenshot capture support for the device display.
+- [ ] Add an image viewer application with support for displaying image files.
 - [ ] Optimize redraws using dirty regions and remove blocking UI loops/delays.
 - [ ] Add themes, configurable brightness, and persistent display preferences.
 
@@ -226,6 +228,7 @@ The list below is intentionally task-oriented so future contributors can select 
 - [ ] Turn Reader into a text-file viewer with scrolling and encoding handling.
 - [ ] Replace or remove the Camera and Music placeholders based on supported hardware.
 - [ ] Define an application manifest or registration convention for adding new apps.
+- [ ] Design and implement Clumsy Store for repository-based Clumsy Apps. A Clumsy App will be an executable ClumsyPL project with metadata such as version, application name, icon, and permissions. Apps can be developed and updated in the repository without changing the device firmware or consuming additional flash space for built-in applications; the final package and update model is still to be designed.
 
 ### Power, reliability, and development
 
