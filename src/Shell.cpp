@@ -1,5 +1,6 @@
 #include "Shell.hpp"
 #include "clumsyPL/ClumsyPL.hpp"
+#include <WiFi.h>
 
 #include <new>
 
@@ -277,6 +278,32 @@ void executeCd(ShellOutput& output, const char* path, char* currentDirectory, si
     strncpy(currentDirectory, newPath, 256);
     currentDirectory[255] = '\0';
     currentDirectoryLength = strlen(currentDirectory);
+}
+
+void executeIfconfig(ShellOutput& output)
+{
+    char line[128];
+
+    output.write("wlan0\r\n");
+    output.write("  status: ");
+    output.write(WiFi.status() == WL_CONNECTED ? "connected\r\n" : "disconnected\r\n");
+
+    snprintf(line, sizeof(line), "  ssid: %s\r\n", WiFi.SSID().c_str());
+    output.write(line);
+    snprintf(line, sizeof(line), "  ip: %s\r\n", WiFi.localIP().toString().c_str());
+    output.write(line);
+    snprintf(line, sizeof(line), "  netmask: %s\r\n", WiFi.subnetMask().toString().c_str());
+    output.write(line);
+    snprintf(line, sizeof(line), "  gateway: %s\r\n", WiFi.gatewayIP().toString().c_str());
+    output.write(line);
+    snprintf(line, sizeof(line), "  dns: %s\r\n", WiFi.dnsIP().toString().c_str());
+    output.write(line);
+    snprintf(line, sizeof(line), "  mac: %s\r\n", WiFi.macAddress().c_str());
+    output.write(line);
+    snprintf(line, sizeof(line), "  rssi: %ld dBm\r\n", static_cast<long>(WiFi.RSSI()));
+    output.write(line);
+    snprintf(line, sizeof(line), "  channel: %d\r\n", WiFi.channel());
+    output.write(line);
 }
 
 

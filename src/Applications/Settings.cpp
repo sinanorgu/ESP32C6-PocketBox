@@ -226,6 +226,52 @@ void knownNetworksCallback(void* params) {
     }
 }
 
+void networkInfoCallback(void* params) {
+    (void)params;
+
+    ListMenu networkMenu;
+    int16_t menuX = 0;
+    int16_t menuY = System::getInstance().interface.infoPanelHeight + System::getInstance().interface.margin;
+    int16_t menuWidth = TFT_HEIGHT;
+    int16_t menuHeight = TFT_WIDTH - menuY;
+
+    networkMenu.setGraphics(menuX, menuY, menuWidth, menuHeight);
+    networkMenu.setHeader("Network Info");
+
+    const bool connected = WiFi.status() == WL_CONNECTED;
+    networkMenu.addtoList(
+        String("Status: ") + (connected ? "Connected" : "Disconnected"),
+        nullptr);
+    networkMenu.addtoList(String("SSID: ") + WiFi.SSID(), nullptr);
+    networkMenu.addtoList(String("IP: ") + WiFi.localIP().toString(), nullptr);
+    networkMenu.addtoList(String("Netmask: ") + WiFi.subnetMask().toString(), nullptr);
+    networkMenu.addtoList(String("Gateway: ") + WiFi.gatewayIP().toString(), nullptr);
+    networkMenu.addtoList(String("DNS: ") + WiFi.dnsIP().toString(), nullptr);
+    networkMenu.addtoList(String("MAC: ") + WiFi.macAddress(), nullptr);
+    networkMenu.addtoList(String("RSSI: ") + String(WiFi.RSSI()) + " dBm", nullptr);
+    networkMenu.addtoList(String("Channel: ") + String(WiFi.channel()), nullptr);
+
+    delay(200);
+    while (true) {
+        networkMenu.draw();
+        if(digitalRead(BUTTON_DOWN_PIN) == LOW){
+            networkMenu.incrementIndex();
+            delay(200);
+        }
+        if(digitalRead(BUTTON_UP_PIN) == LOW){
+            networkMenu.decrementIndex();
+            delay(200);
+        }
+        if(digitalRead(BUTTON_RIGHT_PIN) == LOW){
+            delay(200);
+        }
+        if(digitalRead(BUTTON_LEFT_PIN) == LOW){
+            delay(200);
+            break;
+        }
+    }
+}
+
 void exampleItemCallback(void* params) {
     char* itemName = static_cast<char*>(params);
     Serial.printf("Selected item: %s\n", itemName);
@@ -285,6 +331,7 @@ void wifiSettingsCallback(void* params) {
 
     wifiMenu.addtoList("Known Networks", knownNetworksCallback);
     wifiMenu.addtoList("Scan Networks", scanNetworkCallback);
+    wifiMenu.addtoList("Network Info", networkInfoCallback);
 
     delay(300);
     while (true) {

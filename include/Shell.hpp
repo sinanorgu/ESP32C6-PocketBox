@@ -29,6 +29,7 @@ void executeTouch(ShellOutput& output, const char* path, const char* currentDire
 void executeCp(ShellOutput& output, const char* sourcePath, const char* destinationPath, const char* currentDirectory);
 void executeMv(ShellOutput& output, const char* sourcePath, const char* destinationPath, const char* currentDirectory);
 void executePwd(ShellOutput& output, const char* currentDirectory);
+void executeIfconfig(ShellOutput& output);
 void executeRmdir(ShellOutput& output, const char* path, const char* currentDirectory);
 void executeCpl(ShellOutput& output, const char* path, const char* currentDirectory);
 void executeEcho(ShellOutput& output, const char* command, const char* currentDirectory);
@@ -66,6 +67,10 @@ class Shell {
             } else if (strcmp(cmd, "pwd") == 0) {
                 Serial.println("Executing pwd command...");
                 executePwd(output, workingDirectory);
+            }
+            else if (strcmp(cmd, "ifconfig") == 0) {
+                Serial.println("Executing ifconfig command...");
+                executeIfconfig(output);
             }
             else if (strcmp(cmd, "exit") == 0) {
                 Serial.println("Exiting shell...");
