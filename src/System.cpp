@@ -37,27 +37,62 @@ bool System::addApplicationFolder(ApplicationFolder* folder, ApplicationFolder* 
 
 
 void Interface::drawMenu(int16_t x, int16_t y) const{
-    int iconSize = 100;
+    constexpr int16_t iconSize = 100;
     int appCount = System::getInstance().rootApplicationFolder->getApplicationCount();
-    for(int i = 0; i < 3; i++){
-        int appIndex = offset  + i;
+    const bool redrawAll = !menuRendered || renderedOffset != offset;
 
-        if(appIndex < appCount){
-            if(index == appIndex){
-                int iconX = x + iconSize * i + margin * (i+1);
-                int iconY = y + 20;
-                gfx->drawRoundRect(iconX-3, iconY-3, iconSize+6, iconSize+6, 8, RGB565_CYAN);
-            }
+    if(redrawAll){
+        gfx->fillRect(x, y, TFT_HEIGHT, TFT_WIDTH - y, COLOR_BACKGROUND);
 
-            Application* app = System::getInstance().rootApplicationFolder->getApplication(appIndex);
-            if(app != nullptr){
-                int iconX = x + iconSize * i + margin * (i+1);
-                int iconY = y + 20;
-                app->drawIcon(gfx, iconX, iconY, iconSize, iconSize);
+        for(int i = 0; i < 3; i++){
+            const int appIndex = offset + i;
+            if(appIndex < appCount){
+                const int iconX = x + iconSize * i + margin * (i+1);
+                const int iconY = y + 20;
+                Application* app = System::getInstance().rootApplicationFolder->getApplication(appIndex);
+                if(app != nullptr){
+                    app->drawIcon(gfx, iconX, iconY, iconSize, iconSize);
+                }
             }
-            
         }
-        
+
+        drawSelectionFrame(index - offset, x, y, iconSize, RGB565_CYAN);
+        return;
+    }
+
+    // The icons are unchanged while the selection moves within the window.
+    drawSelectionFrame(renderedIndex - renderedOffset, x, y, iconSize, COLOR_BACKGROUND);
+    drawSelectionFrame(index - offset, x, y, iconSize, RGB565_CYAN);
+}
+
+void Interface::drawSelectionFrame(
+    int slot,
+    int16_t x,
+    int16_t y,
+    int16_t iconSize,
+    uint16_t color) const
+{
+    if(slot < 0 || slot >= 3){
+        return;
+    }
+
+    const int16_t iconX = x + iconSize * slot + margin * (slot + 1);
+    const int16_t iconY = y + 20;
+    const int16_t frameX = iconX - 3;
+    const int16_t frameY = iconY - 3;
+    const int16_t frameWidth = iconSize + 6;
+    const int16_t frameHeight = iconSize + 6;
+
+    if(frameX >= 0 && frameY >= 0 &&
+       frameX + frameWidth <= TFT_HEIGHT &&
+         frameY + frameHeight <= TFT_WIDTH){
+        gfx->drawRoundRect(
+            frameX,
+            frameY,
+            frameWidth,
+            frameHeight,
+            8,
+            color);
     }
 }
 
@@ -72,6 +107,7 @@ void Interface::incrementIndex() {
             offset++;
         }
         changed = true;
+        menuChanged = true;
     }
 }
 void Interface::decrementIndex() {
@@ -84,6 +120,7 @@ void Interface::decrementIndex() {
             offset--;
         }
         changed = true;
+        menuChanged = true;
     }
 }
 
@@ -91,7 +128,16 @@ void Interface::runApp() {
     Application* app = System::getInstance().rootApplicationFolder->getApplication(index);
     if (app != nullptr) {
         app->run();
+        invalidate();
     }
+}
+
+void Interface::invalidate()
+{
+    changed = true;
+    fullRedraw = true;
+    menuChanged = true;
+    menuRendered = false;
 }
 
 void Interface::drawInfoPanel(int16_t x, int16_t y){

@@ -31,33 +31,51 @@ class Interface {
                     ssh:1;
         } dirtyFlags;
 
+        bool fullRedraw;
+        bool menuChanged;
+        bool menuRendered;
+        int renderedIndex;
+        int renderedOffset;
+
     public:    
-        Interface() : index(0), offset(0), innerIndex(0), infoPanelHeight(20), arrowPanelHeight(20), changed(true), dirtyFlags({1,1,1,1,1,1}) {}
+        Interface() : index(0), offset(0), innerIndex(0), infoPanelHeight(20), arrowPanelHeight(20), changed(true), fullRedraw(true), menuChanged(true), menuRendered(false), renderedIndex(0), renderedOffset(0), dirtyFlags({1,1,1,1,1,1}) {}
 
         void drawMenu(int16_t x, int16_t y) const;
+        void drawSelectionFrame(int slot, int16_t x, int16_t y, int16_t iconSize, uint16_t color) const;
         
         void drawInfoPanel(int16_t x, int16_t y);
 
         void drawArrowPanel(int16_t x, int16_t y);
 
         void draw(){
-            if(gfx == nullptr || changed == false){
+            if(gfx == nullptr || (!changed && !fullRedraw && !menuChanged)){
                 return;
             }
-            dirtyFlags.ble = 1;
-            dirtyFlags.wifi = 1;
-            dirtyFlags.time = 1;
-            dirtyFlags.menu = 1;
-            gfx->fillScreen(COLOR_BACKGROUND);
-            drawInfoPanel(0, 0);
-            drawMenu(0, infoPanelHeight);
-            //drawArrowPanel(0, TFT_WIDTH - arrowPanelHeight);
+
+            if(fullRedraw){
+                gfx->fillScreen(COLOR_BACKGROUND);
+                drawInfoPanel(0, 0);
+                drawMenu(0, infoPanelHeight);
+                fullRedraw = false;
+                menuChanged = false;
+                renderedIndex = index;
+                renderedOffset = offset;
+                menuRendered = true;
+            } else if(menuChanged){
+                drawMenu(0, infoPanelHeight);
+                renderedIndex = index;
+                renderedOffset = offset;
+                menuChanged = false;
+                menuRendered = true;
+            }
+
             changed = false;
         }
 
         void incrementIndex();
         void decrementIndex();
         void runApp();
+        void invalidate();
         void setBleConnectionStatus(bool status) {
             dirtyFlags.ble = 1;
             drawInfoPanel(0, 0); // Redraw the info panel to reflect the change
