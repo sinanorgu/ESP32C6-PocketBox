@@ -16,11 +16,14 @@ public:
 class ListMenu {
 
     public:
-        ListMenu() : innerIndex(0), offset(0), changed(true), itemCount(0), maxVisibleItems(0), textSize(2), textHeight(0), headerHeight(0) {};
+        ListMenu() : innerIndex(0), offset(0), changed(true), itemCount(0), maxVisibleItems(0), textSize(2), textHeight(0), headerHeight(0), header("") {};
         void setHeader(const String& header){
             this->header = header;
             headerHeight = header.length() > 0 ? textHeight : 0;
             changed = true;
+            if(maxVisibleItems > 0){
+                maxVisibleItems--;
+            }
         }
         void draw() {
             if(System::getInstance().gfx == nullptr || changed == false){
@@ -102,6 +105,9 @@ class ListMenu {
             this->textHeight = 8 * textSize+4; // Assuming a base height of 8 pixels for text size 1
             this->headerHeight = header.length() > 0 ? textHeight : 0;
             this->maxVisibleItems = (height - headerHeight) / textHeight;
+            if(header.length() > 0 && maxVisibleItems > 0){
+                maxVisibleItems--;
+            }
             
         }
     
