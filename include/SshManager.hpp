@@ -34,6 +34,13 @@ enum class InputResult
     ExitSession
 };
 
+enum class ChannelMode
+{
+    Shell,
+    ScpUpload,
+    ScpDownload
+};
+
 
 class SSHManager
 {
@@ -54,7 +61,8 @@ private:
     void serverTask();
 
     bool authenticate(ssh_session session);
-    ssh_channel acceptShellChannel(ssh_session session);
+    ssh_channel acceptShellChannel(ssh_session session, ChannelMode& mode);
+    bool handleScpTransfer(ssh_channel channel, ChannelMode mode, const char* command);
 
     void handleClient(ssh_session session, ssh_channel channel);
     InputResult processCharacter(char character, SSHOutput& output);
@@ -82,6 +90,7 @@ private:
 
     char lineBuffer[256]{};
     size_t lineLength = 0;
+    char channelCommand[320]{};
 
     static constexpr size_t EditorCapacity = 16U * 1024U;
     char* editorBuffer = nullptr;

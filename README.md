@@ -154,6 +154,25 @@ ssh <username>@<device-ip>
 
 The SSH host key is generated on first use and stored at `/PocketBox/System/ssh_host_ed25519_key` on the SD card. Only password authentication is currently supported.
 
+Single-file transfers are also supported through SCP. Upload a local file to the
+PocketBox SD-card workspace with:
+
+```bash
+scp -O ./local-file.clmsypl <username>@<device-ip>:/PocketBox/
+```
+
+Download a file from the device with:
+
+```bash
+scp -O <username>@<device-ip>:/PocketBox/remote-file.clmsypl ./
+```
+
+SCP transfers use the authenticated SSH connection and are restricted to paths
+under `/PocketBox`. Use `-O` to force the legacy SCP protocol because the
+current implementation does not provide the SFTP subsystem. The current
+implementation supports one regular file per command; recursive directory
+transfers and file metadata preservation are not implemented yet.
+
 ## Current limitations / not supported yet
 
 - Wi-Fi SSID/password and SSH username/password are hard-coded in `src/main.cpp`; there is no provisioning flow or secure credential storage.
@@ -166,6 +185,7 @@ The SSH host key is generated on first use and stored at `/PocketBox/System/ssh_
 - The SSH banner mentions `help`, but a `help` command is not implemented.
 - `reboot` and `shutdown` produce shell result values, but the SSH server does not perform either action.
 - SSH supports one client at a time, password authentication only, and no command history; Up/Down escape sequences are placeholders.
+- SCP supports single-file upload and download under `/PocketBox`, but not recursive directories or metadata preservation.
 - BLE uses a custom GATT characteristic and is not a standard Bluetooth HID keyboard service.
 - BLE input expects a complete 32-bit code point and does not validate characteristic payload length or provide pairing/bonding controls.
 - Button input is polled directly with blocking debounce delays; button events and repeat behavior are defined but not wired into the event queue.

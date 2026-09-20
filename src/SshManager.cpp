@@ -200,14 +200,22 @@ void SSHManager::serverTask()
             continue;
         }
 
-        ssh_channel channel = acceptShellChannel(session);
+        ChannelMode channelMode = ChannelMode::Shell;
+        ssh_channel channel = acceptShellChannel(session, channelMode);
 
         if (channel)
         {
             escapeState = EscapeState::None;
             cursorPosition = 0;
             
-            handleClient(session, channel);
+            if (channelMode == ChannelMode::Shell)
+            {
+                handleClient(session, channel);
+            }
+            else
+            {
+                handleScpTransfer(channel, channelMode, channelCommand);
+            }
 
             ssh_channel_send_eof(channel);
             ssh_channel_close(channel);
@@ -276,7 +284,58 @@ bool SSHManager::authenticate(ssh_session session)
 }
 
 
-ssh_channel SSHManager::acceptShellChannel(ssh_session session)
+namespace
+{
+bool parseScpCommand(
+    const char* command,
+    ChannelMode& mode,
+    char* path,
+    size_t pathCapacity)
+{
+    if (!command || !path || pathCapacity == 0)
+        return false;
+
+    char copy[320];
+    snprintf(copy, sizeof(copy), "%s", command);
+
+    char* token = strtok(copy, " \t");
+    if (!token || strcmp(token, "scp") != 0)
+        return false;
+
+    char* pathToken = nullptr;
+    while ((token = strtok(nullptr, " \t")) != nullptr)
+    {
+        if (strcmp(token, "-f") == 0)
+        {
+            if (pathToken != nullptr)
+                return false;
+            mode = ChannelMode::ScpDownload;
+            pathToken = strtok(nullptr, " \t");
+            break;
+        }
+        if (strcmp(token, "-t") == 0)
+        {
+            if (pathToken != nullptr)
+                return false;
+            mode = ChannelMode::ScpUpload;
+            pathToken = strtok(nullptr, " \t");
+            break;
+        }
+        if (token[0] != '-')
+            return false;
+    }
+
+    if (!pathToken || strtok(nullptr, " \t") != nullptr)
+        return false;
+
+    const int written = snprintf(path, pathCapacity, "%s", pathToken);
+    return written > 0 && static_cast<size_t>(written) < pathCapacity;
+}
+}
+
+ssh_channel SSHManager::acceptShellChannel(
+    ssh_session session,
+    ChannelMode& mode)
 {
     ssh_channel channel = nullptr;
 
@@ -318,6 +377,21 @@ ssh_channel SSHManager::acceptShellChannel(ssh_session session)
             {
                 ssh_message_channel_request_reply_success(message);
             }
+            else if (subtype == SSH_CHANNEL_REQUEST_EXEC)
+            {
+                const char* command = ssh_message_channel_request_command(message);
+                if (command && parseScpCommand(
+                        command,
+                        mode,
+                        channelCommand,
+                        sizeof(channelCommand)))
+                {
+                    ssh_message_channel_request_reply_success(message);
+                    ssh_message_free(message);
+                    return channel;
+                }
+                ssh_message_reply_default(message);
+            }
             else if (subtype == SSH_CHANNEL_REQUEST_SHELL)
             {
                 ssh_message_channel_request_reply_success(message);
@@ -338,6 +412,246 @@ ssh_channel SSHManager::acceptShellChannel(ssh_session session)
     }
 
     return nullptr;
+}
+
+namespace
+{
+bool writeScpBytes(ssh_channel channel, const void* data, size_t length)
+{
+    const uint8_t* bytes = static_cast<const uint8_t*>(data);
+    while (length > 0)
+    {
+        const int written = ssh_channel_write(channel, bytes, length);
+        if (written <= 0)
+            return false;
+        bytes += written;
+        length -= static_cast<size_t>(written);
+    }
+    return true;
+}
+
+bool readScpBytes(ssh_channel channel, void* data, size_t length)
+{
+    uint8_t* bytes = static_cast<uint8_t*>(data);
+    const uint32_t deadline = millis() + 10000;
+    while (length > 0)
+    {
+        const int received = ssh_channel_read(channel, bytes, length, 0);
+        if (received == SSH_ERROR || ssh_channel_is_eof(channel))
+            return false;
+        if (received == 0)
+        {
+            if (static_cast<int32_t>(millis() - deadline) >= 0)
+                return false;
+            vTaskDelay(pdMS_TO_TICKS(10));
+            continue;
+        }
+        bytes += received;
+        length -= static_cast<size_t>(received);
+    }
+    return true;
+}
+
+bool readScpLine(ssh_channel channel, char* line, size_t capacity)
+{
+    if (capacity < 2)
+        return false;
+
+    size_t length = 0;
+    while (length + 1 < capacity)
+    {
+        char character;
+        if (!readScpBytes(channel, &character, 1))
+            return false;
+        if (character == '\n')
+        {
+            line[length] = '\0';
+            return true;
+        }
+        line[length++] = character;
+    }
+    return false;
+}
+
+bool sendScpResponse(ssh_channel channel, uint8_t response)
+{
+    return writeScpBytes(channel, &response, 1);
+}
+
+bool readScpAck(ssh_channel channel)
+{
+    uint8_t response = 0xFF;
+    return readScpBytes(channel, &response, 1) && response == 0;
+}
+
+bool isSafeScpPath(const char* path)
+{
+    if (!path || strncmp(path, "/PocketBox", 10) != 0 ||
+        (path[10] != '\0' && path[10] != '/') ||
+        strstr(path, "/../") != nullptr)
+    {
+        return false;
+    }
+
+    const size_t length = strlen(path);
+    return length < 3 || strcmp(path + length - 3, "/..") != 0;
+}
+
+bool resolveScpDestination(const char* requested, const char* filename, char* resolved, size_t capacity)
+{
+    if (!requested || !filename || !isSafeScpPath(requested) || strchr(filename, '/') != nullptr)
+        return false;
+
+    File destination = SD.open(requested);
+    const bool isDirectory = destination && destination.isDirectory();
+    if (destination)
+        destination.close();
+
+    const int written = snprintf(
+        resolved,
+        capacity,
+        "%s%s%s",
+        requested,
+        isDirectory && requested[strlen(requested) - 1] != '/' ? "/" : "",
+        isDirectory ? filename : "");
+
+    return written > 0 && static_cast<size_t>(written) < capacity && isSafeScpPath(resolved);
+}
+}
+
+bool SSHManager::handleScpTransfer(
+    ssh_channel channel,
+    ChannelMode mode,
+    const char* command)
+{
+    if (!channel || !command || !isSafeScpPath(command))
+    {
+        sendScpResponse(channel, 2);
+        return false;
+    }
+
+    if (mode == ChannelMode::ScpUpload)
+    {
+        if (!sendScpResponse(channel, 0))
+            return false;
+
+        char header[320];
+        if (!readScpLine(channel, header, sizeof(header)) || header[0] != 'C')
+        {
+            sendScpResponse(channel, 2);
+            return false;
+        }
+
+        unsigned long permissions = 0;
+        unsigned long size = 0;
+        char filename[256];
+        if (sscanf(header, "C%lo %lu %255s", &permissions, &size, filename) != 3)
+        {
+            sendScpResponse(channel, 2);
+            return false;
+        }
+
+        char destinationPath[320];
+        if (!resolveScpDestination(command, filename, destinationPath, sizeof(destinationPath)))
+        {
+            sendScpResponse(channel, 2);
+            return false;
+        }
+
+        if (SD.exists(destinationPath) && !SD.remove(destinationPath))
+        {
+            sendScpResponse(channel, 2);
+            return false;
+        }
+
+        File file = SD.open(destinationPath, FILE_WRITE);
+        if (!file || !sendScpResponse(channel, 0))
+        {
+            if (file)
+                file.close();
+            sendScpResponse(channel, 2);
+            return false;
+        }
+
+        uint8_t buffer[512];
+        unsigned long remaining = size;
+        bool success = true;
+        while (remaining > 0)
+        {
+            const size_t chunk = remaining < sizeof(buffer) ? remaining : sizeof(buffer);
+            if (!readScpBytes(channel, buffer, chunk) || file.write(buffer, chunk) != chunk)
+            {
+                success = false;
+                break;
+            }
+            remaining -= static_cast<unsigned long>(chunk);
+        }
+        file.close();
+
+        if (!success)
+        {
+            SD.remove(destinationPath);
+            sendScpResponse(channel, 2);
+            return false;
+        }
+
+        if (!readScpAck(channel))
+        {
+            SD.remove(destinationPath);
+            return false;
+        }
+
+        return sendScpResponse(channel, 0);
+    }
+
+    File file = SD.open(command, FILE_READ);
+    if (!file || file.isDirectory())
+    {
+        Serial.printf("SCP download failed to open: %s\n", command);
+        if (file)
+            file.close();
+        sendScpResponse(channel, 2);
+        return false;
+    }
+
+    if (!readScpAck(channel))
+    {
+        Serial.println("SCP download handshake failed before file header.");
+        file.close();
+        return false;
+    }
+
+    const char* filename = strrchr(command, '/');
+    filename = filename ? filename + 1 : command;
+    char header[320];
+    snprintf(header, sizeof(header), "C0644 %lu %s\n", static_cast<unsigned long>(file.size()), filename);
+    if (!writeScpBytes(channel, header, strlen(header)))
+    {
+        Serial.println("SCP download failed while sending file header.");
+        file.close();
+        return false;
+    }
+
+    if (!readScpAck(channel))
+    {
+        Serial.println("SCP download handshake failed after file header.");
+        file.close();
+        return false;
+    }
+
+    uint8_t buffer[512];
+    while (file.available())
+    {
+        const size_t count = file.read(buffer, sizeof(buffer));
+        if (count == 0 || !writeScpBytes(channel, buffer, count))
+        {
+            Serial.println("SCP download failed while sending file data.");
+            file.close();
+            return false;
+        }
+    }
+    file.close();
+    return sendScpResponse(channel, 0);
 }
 
 void SSHManager::handleClient(
