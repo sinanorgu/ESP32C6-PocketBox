@@ -33,24 +33,15 @@ void KeyboardTestApplication::run() {
     
     while (true) {
 
-        event = System::getInstance().systemEventQueue->pop(event)? event : Event(); 
+        event = System::getInstance().nextEvent();
+        delay(5);
         
         if(event.type == EventType::TextInput) {        
             //System::getInstance().gfx->print((char)event.event.keyboard.character);
             txtbox.draw(System::getInstance().gfx, event);
         } 
 
-        if(digitalRead(BUTTON_DOWN_PIN) == LOW){
-            delay(200);
-        }
-        if(digitalRead(BUTTON_UP_PIN) == LOW){
-            delay(200);
-        }
-        if(digitalRead(BUTTON_RIGHT_PIN) == LOW){
-            delay(200);
-        }
-        if(digitalRead(BUTTON_LEFT_PIN) == LOW){
-            delay(200);
+        if(buttonAction(event, ButtonCode::Left)){
             break; // Exit the settings application
         }
 
@@ -70,9 +61,6 @@ void KeyboardTestApplication::drawIcon(Arduino_GFX* gfx, int16_t x, int16_t y, i
     gfx->print("Keyboard");
     gfx->setCursor(x + width/p, y+height/p + 16+5);
     gfx->print("Test");
-
-
-
 
 }
 

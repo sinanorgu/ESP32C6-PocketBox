@@ -32,7 +32,8 @@ ESP32-C6 PocketBox is an experimental, pocket-sized application platform built a
 ### Event and input system
 
 - Fixed-size FreeRTOS event queue with mutex-protected push/pop operations and a capacity of 32 events.
-- Event definitions for buttons, keyboard, mouse, application lifecycle, battery, Wi-Fi, and Bluetooth state.
+- Debounced button events with short/long presses, repeats, combinations and queued virtual input.
+- Event definitions for keyboard, mouse, application lifecycle, battery, Wi-Fi, and Bluetooth state.
 - BLE text input is translated into Unicode `TextInput` events.
 - Queue operations include push, pop, peek, size, capacity, and clear.
 
@@ -143,7 +144,10 @@ On the launcher screen:
 - **Left / Right:** move between applications.
 - **Up:** open the selected application.
 
-Inside the currently implemented applications, **Left** returns to the launcher. Button mapping is application-specific and is expected to be unified as the event system matures.
+Inside applications, a short **Left** press returns to the previous screen or
+launcher. Actions trigger on release; menu navigation also supports hold-to-repeat.
+Long presses and combinations are separate events for future shortcuts. See
+[button events and automation](docs/button-events.md) for the API and timing contract.
 
 ### Gellery
 
@@ -181,8 +185,9 @@ timeout. Decoder buffers and menu entries are released after use.
 Validation: run `pio run -e esp32c6` and `pio test -e native`. On hardware, check
 landscape/portrait and odd-sized images, transparent PNG, top-down/bottom-up BMP,
 over 60 files, long names, empty/missing folders, oversized/truncated/unsupported
-files, and repeated open/back/exit cycles. Hold Left while viewing/loading to
-confirm it returns only to the list; release and press again to exit.
+files, and repeated open/back/exit cycles. Short-press Left while viewing/loading
+to confirm it returns only to the list; press again to exit. Long presses are
+separate events and do not trigger short-click actions.
 Also check fullscreen toggling, status-panel restoration, previous/next across
 page boundaries, the first/last image, and skipping non-image files.
 
@@ -230,7 +235,7 @@ transfers and file metadata preservation are not implemented yet.
 - SCP supports single-file upload and download under `/PocketBox`, but not recursive directories or metadata preservation.
 - BLE uses a custom GATT characteristic and is not a standard Bluetooth HID keyboard service.
 - BLE input expects a complete 32-bit code point and does not validate characteristic payload length or provide pairing/bonding controls.
-- Button input is polled directly with blocking debounce delays; button events and repeat behavior are defined but not wired into the event queue.
+- Button polling runs in a dedicated task; synchronous application operations still block foreground event consumption.
 - Keyboard key-up/key-down, mouse, application lifecycle, battery, Wi-Fi, and Bluetooth event types are defined but not fully produced or consumed.
 - Application folders exist in the model but are not shown or navigable in the launcher. Each demo currently creates a separate `Utilities` folder instance.
 - Reader, Camera, Music, and Mock App are visual placeholders and do not provide their named functionality.
@@ -254,8 +259,8 @@ The list below is intentionally task-oriented so future contributors can select 
 
 ### Input and event system
 
-- [ ] Replace direct button polling with debounced button events.
-- [ ] Implement press, release, long-press, and repeat semantics.
+- [x] Replace direct button polling with debounced button events.
+- [x] Implement press, release, long-press, and repeat semantics.
 - [ ] Route Wi-Fi, BLE, SD-card, application, and power state changes through the event queue.
 - [ ] Add event subscriptions/dispatch so applications do not busy-wait on the global queue.
 - [ ] Audit queue locking and lifecycle behavior, then add overflow diagnostics.
@@ -334,3 +339,30 @@ such as a future `draw(...)` are type-checked exactly like built-ins before
 execution.
 
 Run the host-side integration tests with `pio test -e native`.
+
+## Native code coverage
+
+Run `python3 scripts/coverage.py` to compile and execute the current native Unity
+suites with Clang instrumentation and generate an LLVM coverage report. This needs
+Python 3.9+, PlatformIO, Clang, `llvm-profdata` and `llvm-cov`; on macOS the LLVM
+tools are resolved through `xcrun`. Use `--pio /path/to/pio` if necessary.
+The separate `coverage` environment inherits the native source filter and leaves
+the ESP32 firmware build unchanged.
+
+Each run writes to a fresh `.pio/coverage/run-*` directory. Its location is recorded
+in `.pio/coverage/latest.txt`. Open `html/index.html` for annotated sources and
+line/branch counts; `summary.txt`, `coverage.json` and `coverage.lcov` are available
+for terminal output and CI integration. Profiles from all suites are merged, and
+test code, Unity and system headers are excluded. A failed test fails the command.
+
+**These percentages cover only instrumented host code, not the whole firmware.**
+Currently this is the ClumsyPL implementation and gallery image-policy helpers.
+`scope.json` lists measured project files and files without coverage data; the
+latter can include declaration-only headers. SSH, shell, actual screen rendering,
+image decoders and hardware-dependent `ARDUINO` branches are not exercised by this
+report. Coverage shows execution, not correctness: memory budgets and simultaneous
+SSH/gallery operation still need separate tests on the real board. Instrumented
+builds should not be used as the baseline for production memory measurements.
+
+The instrumentation/reporting flow follows the
+[LLVM source-based coverage documentation](https://clang.llvm.org/docs/SourceBasedCodeCoverage.html).

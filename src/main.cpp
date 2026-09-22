@@ -53,14 +53,6 @@ void setup()
     BLE_init();
 
     // ========================================
-    // Button initialization
-    // ========================================
-    pinMode(BUTTON_UP_PIN, INPUT_PULLUP);
-    pinMode(BUTTON_LEFT_PIN, INPUT_PULLUP);
-    pinMode(BUTTON_RIGHT_PIN, INPUT_PULLUP);
-    pinMode(BUTTON_DOWN_PIN, INPUT_PULLUP);
-
-    // ========================================
     // Chip-select initialization
     // ========================================
     pinMode(TFT_CS, OUTPUT);
@@ -130,33 +122,19 @@ void setup()
 
     setBacklightBrightness(127);
     app = System::getInstance().rootApplicationFolder->getApplication(0);
+    if (!System::getInstance().buttons.begin(*System::getInstance().systemEventQueue)) {
+        Serial.println("Button input task could not be started.");
+    }
     
 }
 
-int x = 0;
-int y = 0;
-bool changed = true;
 void loop()
 {
-
-    System::getInstance().interface.draw();
-    
-
-    if(digitalRead(BUTTON_UP_PIN) == 0){
-        System::getInstance().interface.runApp();
-        System::getInstance().interface.changed = true; // Mark the interface as changed to redraw the main menu
-
-    }
-    if(digitalRead(BUTTON_DOWN_PIN) == 0){
-        y++;
-        changed = true;
-    }
-    if(digitalRead(BUTTON_RIGHT_PIN) == 0){
-        System::getInstance().interface.incrementIndex();
-        delay(200);
-    }
-    if(digitalRead(BUTTON_LEFT_PIN) == 0){
-        System::getInstance().interface.decrementIndex();
-        delay(200);
-    }
+    auto& system = System::getInstance();
+    system.interface.draw();
+    const Event event = system.nextEvent();
+    if (buttonAction(event, ButtonCode::Up)) system.interface.runApp();
+    else if (buttonAction(event, ButtonCode::Right, true)) system.interface.incrementIndex();
+    else if (buttonAction(event, ButtonCode::Left, true)) system.interface.decrementIndex();
+    delay(5);
 }

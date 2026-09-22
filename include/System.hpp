@@ -3,6 +3,7 @@
 #include <Arduino_GFX_Library.h>
 #include "Application.hpp"
 #include "Event.hpp"
+#include "ButtonInput.hpp"
 #include "Definitions.hpp"
 #include "WifiManager.hpp"
 #include "SdCardManager.hpp"
@@ -92,6 +93,27 @@ class System{
     public:
         Interface interface;
         EventQueue<32> * systemEventQueue;
+        ButtonInput buttons;
+        using ButtonHandler = bool (*)(const Event&, void*);
+        // Register on the UI task. Return true to consume a global shortcut.
+        void setButtonHandler(ButtonHandler handler, void* context = nullptr) {
+            buttonHandler = handler;
+            buttonHandlerContext = context;
+        }
+        bool pollEvent(Event& event) {
+            for (size_t i = 0; i < systemEventQueue->capacity(); ++i) {
+                if (!systemEventQueue->pop(event)) { event = Event{}; return false; }
+                if (!isButtonEvent(event) || !buttonHandler ||
+                    !buttonHandler(event, buttonHandlerContext)) return true;
+            }
+            event = Event{};
+            return false;
+        }
+        Event nextEvent() {
+            Event event;
+            pollEvent(event);
+            return event;
+        }
         WifiManager wifiManager;
         SdCardManager sdCardManager;
         SSHManager *sshManager;
@@ -140,10 +162,11 @@ class System{
 
     private:
         System();
+        ButtonHandler buttonHandler = nullptr;
+        void* buttonHandlerContext = nullptr;
         System(const System&) = delete;
         System& operator=(const System&) = delete;
 };
-
 
 
 

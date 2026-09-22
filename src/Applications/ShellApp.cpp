@@ -17,8 +17,6 @@ ShellApplication::ShellApplication(){
     name = "Shell";
 }
 
-
-
 void ShellApplication::run() {
 
     int16_t menuX = 0;
@@ -38,15 +36,14 @@ void ShellApplication::run() {
     
     while (true) {
 
-        event = System::getInstance().systemEventQueue->pop(event)? event : Event(); 
+        event = System::getInstance().nextEvent();
+        delay(5);
         
         if(event.type == EventType::TextInput) {        
             //System::getInstance().gfx->print((char)event.event.keyboard.character);
             if(event.event.keyboard.character == 0x0A) { //Newline
                 //shell.executeCommand(txtbox.text); 
                 txtbox.clearText();
-
-
 
                 int cursorX = 0;
                 int cursorY = System::getInstance().gfx->getCursorY();
@@ -63,17 +60,7 @@ void ShellApplication::run() {
             }
         } 
 
-        if(digitalRead(BUTTON_DOWN_PIN) == LOW){
-            delay(200);
-        }
-        if(digitalRead(BUTTON_UP_PIN) == LOW){
-            delay(200);
-        }
-        if(digitalRead(BUTTON_RIGHT_PIN) == LOW){
-            delay(200);
-        }
-        if(digitalRead(BUTTON_LEFT_PIN) == LOW){
-            delay(200);
+        if(buttonAction(event, ButtonCode::Left)){
             break; // Exit the settings application
         }
 
@@ -91,10 +78,6 @@ void ShellApplication::drawIcon(Arduino_GFX* gfx, int16_t x, int16_t y, int16_t 
     gfx->setTextColor(RGB565_GREEN);
     gfx->setTextSize(2);
     gfx->print(">Shell");
-    
-
-
-
 
 }
 

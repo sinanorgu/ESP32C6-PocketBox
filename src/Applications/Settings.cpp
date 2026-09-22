@@ -15,9 +15,8 @@ SettingsApplication::SettingsApplication(){
     name = "Settings";
 }
 
-
 void connectToWiFiCallback(void* params) {
-    delay(1000);
+
     char* ssid = static_cast<char*>(params);
     Serial.printf("Connecting to Wi-Fi network: %s\n", ssid);
     int16_t menuX = 0;
@@ -36,27 +35,19 @@ void connectToWiFiCallback(void* params) {
     int16_t passwordBoxHeight = 30;
     TextBox<32> passwordBox(passwordBoxX, passwordBoxY, passwordBoxWidth, passwordBoxHeight, RGB565_WHITE, COLOR_BACKGROUND);
 
-
-        
     Event event;
     
     while (true) {
 
-        event = System::getInstance().systemEventQueue->pop(event)? event : Event(); 
+        event = System::getInstance().nextEvent();
+        delay(5);
         
         if(event.type == EventType::TextInput) {        
             //System::getInstance().gfx->print((char)event.event.keyboard.character);
             passwordBox.draw(System::getInstance().gfx, event);
         } 
 
-        if(digitalRead(BUTTON_DOWN_PIN) == LOW){
-            delay(200);
-        }
-        if(digitalRead(BUTTON_UP_PIN) == LOW){
-            delay(200);
-        }
-        if(digitalRead(BUTTON_RIGHT_PIN) == LOW){
-            delay(200);
+        if(buttonAction(event, ButtonCode::Right)){
             // Attempt to connect to Wi-Fi using the entered password
             char * password = passwordBox.text;
             bool connected = System::getInstance().wifiManager.connectToWiFi(ssid, password);
@@ -74,16 +65,13 @@ void connectToWiFiCallback(void* params) {
     
             }
         }
-        if(digitalRead(BUTTON_LEFT_PIN) == LOW){
-            delay(200);
+        if(buttonAction(event, ButtonCode::Left)){
             break; // Exit the settings application
         }
 
     }
 
-    
 }
-
 
 struct KnownNetworkMenuContext {
     String ssid;
@@ -115,7 +103,7 @@ void deleteKnownWiFi(void* params){
 }
 
 void connectToKnonwnWiFiCallback(void* params){
-    delay(200);
+
     KnownNetworkMenuContext context{static_cast<const char*>(params)};
     int16_t menuX = 0;
     int16_t menuY = System::getInstance().interface.infoPanelHeight + System::getInstance().interface.margin;
@@ -129,24 +117,22 @@ void connectToKnonwnWiFiCallback(void* params){
 
     while (true) {
         networkMenu.draw();
-        if(digitalRead(BUTTON_DOWN_PIN) == LOW){
+        const Event event = System::getInstance().nextEvent();
+        delay(5);
+        if(buttonAction(event, ButtonCode::Down, true)){
             networkMenu.incrementIndex();
-            delay(200);
         }
-        if(digitalRead(BUTTON_UP_PIN) == LOW){
+        if(buttonAction(event, ButtonCode::Up, true)){
             networkMenu.decrementIndex();
-            delay(200);
         }
-        if(digitalRead(BUTTON_RIGHT_PIN) == LOW){
+        if(buttonAction(event, ButtonCode::Right)){
             networkMenu.runSelectedItem();
-            delay(200);
             networkMenu.changed = true;
             if(context.deleted){
                 break;
             }
         }
-        if(digitalRead(BUTTON_LEFT_PIN) == LOW){
-            delay(200);
+        if(buttonAction(event, ButtonCode::Left)){
             break;
         }
     }
@@ -161,29 +147,25 @@ void scanNetworkCallback(void* params) {
     int16_t menuWidth = TFT_HEIGHT;
     int16_t menuHeight = TFT_WIDTH - menuY;
     wifiMenu.setGraphics(menuX, menuY, menuWidth, menuHeight);  
-    
 
     for (const auto& network : networks) {
         wifiMenu.addtoList(network, connectToWiFiCallback, (void*)network.c_str());
     }
-        
-    delay(200);
+
     while (true) {
         wifiMenu.draw();
-        if(digitalRead(BUTTON_DOWN_PIN) == LOW){
+        const Event event = System::getInstance().nextEvent();
+        delay(5);
+        if(buttonAction(event, ButtonCode::Down, true)){
             wifiMenu.incrementIndex();
-            delay(200);
         }
-        if(digitalRead(BUTTON_UP_PIN) == LOW){
+        if(buttonAction(event, ButtonCode::Up, true)){
             wifiMenu.decrementIndex();
-            delay(200);
         }
-        if(digitalRead(BUTTON_RIGHT_PIN) == LOW){
+        if(buttonAction(event, ButtonCode::Right)){
             wifiMenu.runSelectedItem();
-            delay(200);
         }
-        if(digitalRead(BUTTON_LEFT_PIN) == LOW){
-            delay(200);
+        if(buttonAction(event, ButtonCode::Left)){
             break; // Exit the settings application
         }
     }
@@ -203,24 +185,21 @@ void knownNetworksCallback(void* params) {
     for (const auto& network : knownNetworks) {
         knownNetworksMenu.addtoList(network.ssid, connectToKnonwnWiFiCallback, (void*)network.ssid.c_str());
     }
-        
-    delay(200);
+
     while (true) {
         knownNetworksMenu.draw();
-        if(digitalRead(BUTTON_DOWN_PIN) == LOW){
+        const Event event = System::getInstance().nextEvent();
+        delay(5);
+        if(buttonAction(event, ButtonCode::Down, true)){
             knownNetworksMenu.incrementIndex();
-            delay(200);
         }
-        if(digitalRead(BUTTON_UP_PIN) == LOW){
+        if(buttonAction(event, ButtonCode::Up, true)){
             knownNetworksMenu.decrementIndex();
-            delay(200);
         }
-        if(digitalRead(BUTTON_RIGHT_PIN) == LOW){
+        if(buttonAction(event, ButtonCode::Right)){
             knownNetworksMenu.runSelectedItem();
-            delay(200);
         }
-        if(digitalRead(BUTTON_LEFT_PIN) == LOW){
-            delay(200);
+        if(buttonAction(event, ButtonCode::Left)){
             break; // Exit the settings application
         }
     }
@@ -251,22 +230,18 @@ void networkInfoCallback(void* params) {
     networkMenu.addtoList(String("RSSI: ") + String(WiFi.RSSI()) + " dBm", nullptr);
     networkMenu.addtoList(String("Channel: ") + String(WiFi.channel()), nullptr);
 
-    delay(200);
     while (true) {
         networkMenu.draw();
-        if(digitalRead(BUTTON_DOWN_PIN) == LOW){
+        const Event event = System::getInstance().nextEvent();
+        delay(5);
+        if(buttonAction(event, ButtonCode::Down, true)){
             networkMenu.incrementIndex();
-            delay(200);
         }
-        if(digitalRead(BUTTON_UP_PIN) == LOW){
+        if(buttonAction(event, ButtonCode::Up, true)){
             networkMenu.decrementIndex();
-            delay(200);
         }
-        if(digitalRead(BUTTON_RIGHT_PIN) == LOW){
-            delay(200);
-        }
-        if(digitalRead(BUTTON_LEFT_PIN) == LOW){
-            delay(200);
+
+        if(buttonAction(event, ButtonCode::Left)){
             break;
         }
     }
@@ -294,30 +269,26 @@ void exampleCallback(void *params) {
         menu.addtoList(namelist[i], exampleItemCallback, &namelist[i]);
     }
 
-    delay(200);
     while (true) {
         menu.draw();
-        if(digitalRead(BUTTON_DOWN_PIN) == LOW){
+        const Event event = System::getInstance().nextEvent();
+        delay(5);
+        if(buttonAction(event, ButtonCode::Down, true)){
             menu.incrementIndex();
-            delay(200);
         }
-        if(digitalRead(BUTTON_UP_PIN) == LOW){
+        if(buttonAction(event, ButtonCode::Up, true)){
             menu.decrementIndex();
-            delay(200);
         }
-        if(digitalRead(BUTTON_RIGHT_PIN) == LOW){
+        if(buttonAction(event, ButtonCode::Right)){
             menu.runSelectedItem();
-            delay(200);
             menu.changed = true; // Mark the menu as changed to redraw after returning from the callback
         }
-        if(digitalRead(BUTTON_LEFT_PIN) == LOW){
-            delay(200);
+        if(buttonAction(event, ButtonCode::Left)){
             break; // Exit the settings application
         }
 
     }
 }
-
 
 void wifiSettingsCallback(void* params) {
     ListMenu wifiMenu;
@@ -333,30 +304,26 @@ void wifiSettingsCallback(void* params) {
     wifiMenu.addtoList("Scan Networks", scanNetworkCallback);
     wifiMenu.addtoList("Network Info", networkInfoCallback);
 
-    delay(300);
     while (true) {
         wifiMenu.draw();
-        if(digitalRead(BUTTON_DOWN_PIN) == LOW){
+        const Event event = System::getInstance().nextEvent();
+        delay(5);
+        if(buttonAction(event, ButtonCode::Down, true)){
             wifiMenu.incrementIndex();
-            delay(200);
         }
-        if(digitalRead(BUTTON_UP_PIN) == LOW){
+        if(buttonAction(event, ButtonCode::Up, true)){
             wifiMenu.decrementIndex();
-            delay(200);
         }
-        if(digitalRead(BUTTON_RIGHT_PIN) == LOW){
+        if(buttonAction(event, ButtonCode::Right)){
             wifiMenu.runSelectedItem();
-            delay(200);
             wifiMenu.changed = true; // Mark the menu as changed to redraw after returning from the callback
         }
-        if(digitalRead(BUTTON_LEFT_PIN) == LOW){
-            delay(200);
+        if(buttonAction(event, ButtonCode::Left)){
             break; // Exit the settings application
         }
 
     }
 }
-
 
 void SettingsApplication::run() {
     Serial.println("Settings application opened");
@@ -377,27 +344,21 @@ void SettingsApplication::run() {
     menu.addtoList("System Info2", nullptr);
     menu.addtoList("Example", exampleCallback);
 
-    
-
-    
-    
     while (true) {
         menu.draw();
-        if(digitalRead(BUTTON_DOWN_PIN) == LOW){
+        const Event event = System::getInstance().nextEvent();
+        delay(5);
+        if(buttonAction(event, ButtonCode::Down, true)){
             menu.incrementIndex();
-            delay(200);
         }
-        if(digitalRead(BUTTON_UP_PIN) == LOW){
+        if(buttonAction(event, ButtonCode::Up, true)){
             menu.decrementIndex();
-            delay(200);
         }
-        if(digitalRead(BUTTON_RIGHT_PIN) == LOW){
+        if(buttonAction(event, ButtonCode::Right)){
             menu.runSelectedItem();
-            delay(200);
             menu.changed = true; // Mark the menu as changed to redraw after returning from the callback
         }
-        if(digitalRead(BUTTON_LEFT_PIN) == LOW){
-            delay(200);
+        if(buttonAction(event, ButtonCode::Left)){
             break; // Exit the settings application
         }
 

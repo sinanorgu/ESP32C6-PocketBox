@@ -1,0 +1,2 @@
+# Each suite has its own main; exclude test entry points from merged profiles.
+!fun:main

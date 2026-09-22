@@ -1,6 +1,13 @@
 #pragma once
 
-#include <Arduino.h>
+#include <cstddef>
+#include <cstdint>
+#ifdef ARDUINO
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
+#else
+#include <mutex>
+#endif
 
 enum class EventType : uint8_t
 {
@@ -31,6 +38,12 @@ enum class EventType : uint8_t
     BluetoothConnected,
     BluetoothDisconnected,
 
+    // Appended to preserve existing keyboard/system event values.
+    ButtonClick,
+    ButtonLongPress,
+    ButtonChord,
+    ButtonStateSync,
+
 };
 
 enum class ButtonCode : uint8_t
@@ -51,6 +64,11 @@ struct Event
         struct
         {
             ButtonCode button;
+            uint8_t pressedMask; // Current combined state after this transition.
+            uint8_t gestureMask; // All buttons participating in this press.
+            uint8_t sourceMask; // Bitset of ButtonSource providers.
+            uint32_t heldMs;
+            bool repeated; // A click after repeats must not move a menu again.
         } button;
 
         struct
@@ -77,142 +95,105 @@ struct Event
             int32_t code;
             int32_t value;
         } custom;
-    } event;
+    } event{};
 };
 
 
-template <size_t Capacity>
-class EventQueue
-{
+constexpr uint8_t buttonMask(ButtonCode button) {
+    return button >= ButtonCode::Up && button <= ButtonCode::Right
+        ? uint8_t(1U << (uint8_t(button) - 1)) : 0;
+}
+constexpr uint8_t AllButtons = 0x0f;
+
+inline bool isButtonEvent(const Event& e) {
+    return e.type == EventType::ButtonDown || e.type == EventType::ButtonUp ||
+           e.type == EventType::ButtonRepeat || e.type == EventType::ButtonClick ||
+           e.type == EventType::ButtonLongPress || e.type == EventType::ButtonChord ||
+           e.type == EventType::ButtonStateSync;
+}
+
+inline bool buttonAction(const Event& e, ButtonCode code, bool allowRepeat = false) {
+    return ((e.type == EventType::ButtonClick && (!allowRepeat || !e.event.button.repeated)) ||
+            (allowRepeat && e.type == EventType::ButtonRepeat)) &&
+           e.event.button.button == code && e.event.button.gestureMask == buttonMask(code);
+}
+
+// The embedded queue uses one statically allocated mutex; no per-event allocation.
+class EventMutex {
 public:
-    EventQueue() {
-        mutex = xSemaphoreCreateMutex();
-    }
-    bool push(Event &event);
-    bool pop(Event &event);
-    bool peek(Event &event) const;
-    bool isEmpty() const;
-    bool isFull() const;
-    size_t size() const;
-    constexpr size_t capacity() const;
-    void clear();
-
+#ifdef ARDUINO
+    EventMutex() : handle(xSemaphoreCreateMutexStatic(&storage)) {}
+    void lock() { xSemaphoreTake(handle, portMAX_DELAY); }
+    void unlock() { xSemaphoreGive(handle); }
 private:
-    static constexpr size_t nextIndex(size_t index);
+    StaticSemaphore_t storage;
+    SemaphoreHandle_t handle;
+#else
+    void lock() { mutex.lock(); }
+    void unlock() { mutex.unlock(); }
 private:
-    SemaphoreHandle_t mutex; 
-    Event buffer_[Capacity];
-    size_t head_ = 0;
-    size_t tail_ = 0;
-    size_t count_ = 0;
+    std::mutex mutex;
+#endif
+};
+class EventLock {
+public:
+    explicit EventLock(EventMutex& mutex) : mutex(mutex) { mutex.lock(); }
+    ~EventLock() { mutex.unlock(); }
+    EventLock(const EventLock&) = delete;
+private:
+    EventMutex& mutex;
 };
 
-
-
 template <size_t Capacity>
-bool EventQueue<Capacity>::push(Event &event)
-{
-    if (xSemaphoreTake(mutex, portMAX_DELAY) != pdTRUE) {
-        return false;
+class EventQueue {
+    static_assert(Capacity > 0, "EventQueue must not be empty");
+public:
+    EventQueue() = default;
+    EventQueue(const EventQueue&) = delete;
+    EventQueue& operator=(const EventQueue&) = delete;
+    bool push(const Event& event) {
+        EventLock lock(mutex);
+        if (count == Capacity) {
+            // Repeats are disposable; never evict keyboard or transition events.
+            size_t repeat = 0;
+            while (repeat < count && at(repeat).type != EventType::ButtonRepeat) ++repeat;
+            if (repeat == count) { ++dropped; return false; }
+            remove(repeat);
+            ++dropped;
+        }
+        buffer[(head + count) % Capacity] = event;
+        ++count;
+        return true;
     }
-    if (isFull()) {
-        xSemaphoreGive(mutex);
-        return false;
+    bool pop(Event& event) {
+        EventLock lock(mutex);
+        if (!count) return false;
+        event = at(0);
+        head = (head + 1) % Capacity;
+        --count;
+        return true;
     }
-
-    buffer_[tail_] = event;
-    tail_ = nextIndex(tail_);
-    count_++;
-    xSemaphoreGive(mutex);
-
-    return true;
-}
-
-template <size_t Capacity>
-bool EventQueue<Capacity>::pop(Event &event)
-{
-    if (xSemaphoreTake(mutex, portMAX_DELAY) != pdTRUE) {
-        return false;
+    bool peek(Event& event) const {
+        EventLock lock(mutex);
+        if (!count) return false;
+        event = at(0);
+        return true;
     }
-    if (isEmpty()) {
-        xSemaphoreGive(mutex);
-        return false;
+    bool isEmpty() const { return size() == 0; }
+    bool isFull() const { return size() == Capacity; }
+    size_t size() const { EventLock lock(mutex); return count; }
+    constexpr size_t capacity() const { return Capacity; }
+    uint32_t droppedCount() const { EventLock lock(mutex); return dropped; }
+    void clear() { EventLock lock(mutex); head = count = 0; }
+private:
+    const Event& at(size_t i) const { return buffer[(head + i) % Capacity]; }
+    Event& at(size_t i) { return buffer[(head + i) % Capacity]; }
+    void remove(size_t i) {
+        for (; i + 1 < count; ++i) at(i) = at(i + 1);
+        --count;
     }
-
-    event = buffer_[head_];
-    head_ = nextIndex(head_);
-    count_--;
-    xSemaphoreGive(mutex);
-    return true;
-}
-
-template <size_t Capacity>
-bool EventQueue<Capacity>::peek(Event &event) const
-{
-    if (xSemaphoreTake(mutex, portMAX_DELAY) != pdTRUE) {
-        return false;
-    }
-    if (isEmpty()) {
-        xSemaphoreGive(mutex);
-        return false;
-    }
-
-    event = buffer_[head_];
-    xSemaphoreGive(mutex);
-    return true;
-}
-
-template <size_t Capacity>
-bool EventQueue<Capacity>::isEmpty() const
-{
-
-    bool result = count_ == 0;
-    return result;
-}
-
-template <size_t Capacity>
-bool EventQueue<Capacity>::isFull() const
-{
-
-    bool result = count_ == Capacity;
-    return result;
-}
-
-template <size_t Capacity>
-size_t EventQueue<Capacity>::size() const
-{
-    
-    size_t result = count_;
-    return result;
-}
-
-template <size_t Capacity>
-constexpr size_t EventQueue<Capacity>::capacity() const
-{
-    if (xSemaphoreTake(mutex, portMAX_DELAY) != pdTRUE) {
-        return 0;
-    }
-    size_t result = Capacity;
-    xSemaphoreGive(mutex);
-    return result;
-}
-
-template <size_t Capacity>
-void EventQueue<Capacity>::clear()
-{
-    if (xSemaphoreTake(mutex, portMAX_DELAY) != pdTRUE) {
-        return;
-    }
-    head_ = 0;
-    tail_ = 0;
-    count_ = 0;
-    xSemaphoreGive(mutex);
-}
-
-template <size_t Capacity>
-constexpr size_t EventQueue<Capacity>::nextIndex(size_t index)
-{
-    
-    size_t result = (index + 1) % Capacity;
-    return result;
-}
+    mutable EventMutex mutex;
+    Event buffer[Capacity]{};
+    size_t head = 0, count = 0;
+    uint32_t dropped = 0;
+};

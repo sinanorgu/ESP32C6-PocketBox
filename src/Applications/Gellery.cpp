@@ -35,17 +35,20 @@ void message(const char* text) {
     gfx->print("Left: back");
 }
 
-// Consume the release too, so one press cannot cross two screens.
-void releaseButton(int pin) {
-    do {
-        while (digitalRead(pin) == LOW) delay(10);
-        delay(25);
-    } while (digitalRead(pin) == LOW);
+// While loading, ignore navigation/text belonging to this non-text screen.
+// A bounded drain keeps the shared queue responsive without stealing from a text app.
+bool cancelRequested() {
+    auto& system = System::getInstance();
+    for (size_t i = 0; i < system.systemEventQueue->capacity(); ++i) {
+        Event event;
+        if (!system.pollEvent(event)) break;
+        if (buttonAction(event, ButtonCode::Left)) return true;
+    }
+    return false;
 }
 
 void waitBack() {
-    while (digitalRead(BUTTON_LEFT_PIN) != LOW) delay(10);
-    releaseButton(BUTTON_LEFT_PIN);
+    while (!buttonAction(System::getInstance().nextEvent(), ButtonCode::Left)) delay(5);
 }
 
 bool hasMemory(size_t bytes) {
@@ -100,7 +103,7 @@ bool cancelled = false, timedOut = false, ioFailed = false;
 
 bool keepDecoding() {
     delay(1); // Let networking and the watchdog run during decoding.
-    cancelled |= digitalRead(BUTTON_LEFT_PIN) == LOW;
+    cancelled |= cancelRequested();
     timedOut |= uint32_t(millis() - decodeStarted) >= gallery::DecodeTimeoutMs;
     return !cancelled && !timedOut && !ioFailed;
 }
@@ -269,7 +272,7 @@ NeighborResult findNeighbor(const String& current, bool forward, String& result)
     const uint32_t started = millis();
     while (true) {
         delay(1);
-        if (digitalRead(BUTTON_LEFT_PIN) == LOW) return NeighborResult::Cancelled;
+        if (cancelRequested()) return NeighborResult::Cancelled;
         if (uint32_t(millis() - started) >= gallery::DecodeTimeoutMs || !hasMemory(2048))
             return NeighborResult::Error;
         File file = directory.openNextFile();
@@ -307,7 +310,6 @@ void showImage(void* parameter) {
             const char* error = loadImage(path, fullscreen);
             imageFile.close();
             if (cancelled) {
-                releaseButton(BUTTON_LEFT_PIN);
                 break;
             }
             if (timedOut) error = "Image loading exceeded 10 seconds.";
@@ -318,22 +320,19 @@ void showImage(void* parameter) {
             }
             redraw = false;
         }
-        if (digitalRead(BUTTON_LEFT_PIN) == LOW) {
-            releaseButton(BUTTON_LEFT_PIN);
+        const Event event = system.nextEvent();
+        if (buttonAction(event, ButtonCode::Left)) {
             break;
-        } else if (digitalRead(BUTTON_RIGHT_PIN) == LOW) {
-            releaseButton(BUTTON_RIGHT_PIN);
+        } else if (buttonAction(event, ButtonCode::Right)) {
             fullscreen = !fullscreen;
             system.gfx->fillScreen(RGB565_BLACK);
             system.interface.setInfoPanelVisible(!fullscreen);
             redraw = true;
-        } else if (digitalRead(BUTTON_UP_PIN) == LOW || digitalRead(BUTTON_DOWN_PIN) == LOW) {
-            const bool forward = digitalRead(BUTTON_UP_PIN) != LOW;
-            releaseButton(forward ? BUTTON_DOWN_PIN : BUTTON_UP_PIN);
+        } else if (buttonAction(event, ButtonCode::Up) || buttonAction(event, ButtonCode::Down)) {
+            const bool forward = buttonAction(event, ButtonCode::Down);
             String next;
             const NeighborResult result = findNeighbor(path, forward, next);
             if (result == NeighborResult::Cancelled) {
-                releaseButton(BUTTON_LEFT_PIN);
                 break;
             }
             if (result == NeighborResult::Found) {
@@ -364,7 +363,6 @@ public:
     GelleryApplication() { name = "Gellery"; }
     void run() override {
         if (!System::getInstance().gfx) return;
-        releaseButton(BUTTON_UP_PIN);
         if (!System::getInstance().isSDCardInserted || SD.cardType() == CARD_NONE) {
             message("SD card is not available.");
             waitBack();
@@ -425,7 +423,7 @@ public:
                 }
                 file.close();
                 delay(1);
-                if (digitalRead(BUTTON_LEFT_PIN) == LOW) { releaseButton(BUTTON_LEFT_PIN); return; }
+                if (cancelRequested()) return;
             }
             directory.close();
             if (failed) { message("Not enough free memory for the file list."); waitBack(); return; }
@@ -433,18 +431,15 @@ public:
             if (count == 0) menu.addtoList("No files", nullptr);
             while (!reload && running) {
                 menu.draw();
-                if (digitalRead(BUTTON_LEFT_PIN) == LOW) {
-                    releaseButton(BUTTON_LEFT_PIN);
+                const Event event = System::getInstance().nextEvent();
+                if (buttonAction(event, ButtonCode::Left)) {
                     running = false;
-                } else if (digitalRead(BUTTON_RIGHT_PIN) == LOW) {
-                    releaseButton(BUTTON_RIGHT_PIN);
+                } else if (buttonAction(event, ButtonCode::Right)) {
                     menu.runSelectedItem();
-                } else if (digitalRead(BUTTON_UP_PIN) == LOW) {
+                } else if (buttonAction(event, ButtonCode::Up, true)) {
                     menu.decrementIndex();
-                    delay(150);
-                } else if (digitalRead(BUTTON_DOWN_PIN) == LOW) {
+                } else if (buttonAction(event, ButtonCode::Down, true)) {
                     menu.incrementIndex();
-                    delay(150);
                 }
                 delay(10);
             }
