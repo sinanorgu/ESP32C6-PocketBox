@@ -32,6 +32,7 @@ class Interface {
         } dirtyFlags;
 
         bool fullRedraw;
+        bool infoPanelVisible = true;
         bool menuChanged;
         bool menuRendered;
         int renderedIndex;
@@ -44,6 +45,10 @@ class Interface {
         void drawSelectionFrame(int slot, int16_t x, int16_t y, int16_t iconSize, uint16_t color) const;
         
         void drawInfoPanel(int16_t x, int16_t y);
+        void setInfoPanelVisible(bool visible) {
+            infoPanelVisible = visible;
+            if (visible && gfx != nullptr) drawInfoPanel(0, 0);
+        }
 
         void drawArrowPanel(int16_t x, int16_t y);
 
@@ -138,7 +143,6 @@ class System{
         System(const System&) = delete;
         System& operator=(const System&) = delete;
 };
-
 
 
 

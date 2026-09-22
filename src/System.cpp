@@ -141,7 +141,7 @@ void Interface::invalidate()
 }
 
 void Interface::drawInfoPanel(int16_t x, int16_t y){
-
+    if (!infoPanelVisible || gfx == nullptr) return;
 
     gfx->fillRect(x, y, TFT_HEIGHT, infoPanelHeight, RGB565_DARKGREY);
     gfx->drawRect(x, y, TFT_HEIGHT, infoPanelHeight, RGB565_WHITE);

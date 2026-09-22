@@ -54,6 +54,7 @@ bool hasMemory(size_t bytes) {
 }
 
 struct RenderContext {
+    int areaTop = contentY();
     int sourceWidth = 0, sourceHeight = 0;
     gallery::Size size{0, 0};
     int x = 0, y = 0;
@@ -68,9 +69,9 @@ struct RenderContext {
         if (gfx->width() > TFT_HEIGHT) return false;
         sourceWidth = width;
         sourceHeight = height;
-        size = gallery::fit(width, height, gfx->width(), gfx->height() - contentY());
+        size = gallery::fit(width, height, gfx->width(), gfx->height() - areaTop);
         x = (gfx->width() - size.width) / 2;
-        y = contentY() + (gfx->height() - contentY() - size.height) / 2;
+        y = areaTop + (gfx->height() - areaTop - size.height) / 2;
         return size.width > 0 && size.height > 0;
     }
 
@@ -220,7 +221,7 @@ const char* decodeBmp(RenderContext& render, const uint8_t* header, size_t heade
     return nullptr;
 }
 
-const char* loadImage(const String& path) {
+const char* loadImage(const String& path, bool fullscreen) {
     imageFile = SD.open(path, FILE_READ);
     if (!imageFile || imageFile.isDirectory()) return "File could not be opened.";
     if (imageFile.size() > gallery::MaxFileBytes) return "File too large. Maximum: 2 MiB.";
@@ -230,6 +231,7 @@ const char* loadImage(const String& path) {
     if (!hasMemory(sizeof(RenderContext))) return "Not enough free memory.";
     std::unique_ptr<RenderContext> render(new (std::nothrow) RenderContext());
     if (!render) return "Not enough free memory.";
+    render->areaTop = fullscreen ? 0 : contentY();
     if (header[0] == 0xff && header[1] == 0xd8) return decodeJpeg(*render);
     const uint8_t pngSignature[] = {137, 80, 78, 71, 13, 10, 26, 10};
     if (memcmp(header, pngSignature, sizeof(pngSignature)) == 0) {
@@ -240,22 +242,112 @@ const char* loadImage(const String& path) {
     return "Unsupported format. Use JPEG, PNG or BMP.";
 }
 
-void showImage(void* parameter) {
-    const auto& path = *static_cast<String*>(parameter);
-    clearContent();
-    decodeStarted = millis();
-    cancelled = timedOut = ioFailed = false;
-    const char* error = loadImage(path);
-    imageFile.close();
-    if (cancelled) {
-        releaseButton(BUTTON_LEFT_PIN);
-        clearContent();
-        return;
+String galleryPath(File& file) {
+    String name = file.name();
+    int slash = name.lastIndexOf('/');
+    if (slash >= 0) name = name.substring(slash + 1);
+    return String(GALLERY_FOLDER) + "/" + name;
+}
+
+bool isImage(File& file) {
+    uint8_t header[8] = {};
+    if (file.read(header, sizeof(header)) != sizeof(header)) return false;
+    const uint8_t png[] = {137, 80, 78, 71, 13, 10, 26, 10};
+    return (header[0] == 0xff && header[1] == 0xd8) ||
+           (header[0] == 'B' && header[1] == 'M') ||
+           memcmp(header, png, sizeof(png)) == 0;
+}
+
+enum class NeighborResult { Found, Boundary, Cancelled, Error };
+
+// Walk directory order across list pages, retaining only one candidate path.
+NeighborResult findNeighbor(const String& current, bool forward, String& result) {
+    File directory = SD.open(GALLERY_FOLDER);
+    if (!directory || !directory.isDirectory()) return NeighborResult::Error;
+    bool foundCurrent = false;
+    String previous;
+    const uint32_t started = millis();
+    while (true) {
+        delay(1);
+        if (digitalRead(BUTTON_LEFT_PIN) == LOW) return NeighborResult::Cancelled;
+        if (uint32_t(millis() - started) >= gallery::DecodeTimeoutMs || !hasMemory(2048))
+            return NeighborResult::Error;
+        File file = directory.openNextFile();
+        if (!file) break;
+        if (file.isDirectory()) continue;
+        String path = galleryPath(file);
+        if (path == current) {
+            foundCurrent = true;
+            if (!forward) {
+                if (previous.isEmpty()) return NeighborResult::Boundary;
+                result = previous;
+                return NeighborResult::Found;
+            }
+        } else if (isImage(file)) {
+            if (foundCurrent && forward) {
+                result = path;
+                return NeighborResult::Found;
+            }
+            if (!forward) previous = path;
+        }
     }
-    if (timedOut) error = "Image loading exceeded 10 seconds.";
-    else if (ioFailed) error = "SD read failed or image is damaged.";
-    if (error) message(error);
-    waitBack();
+    return foundCurrent ? NeighborResult::Boundary : NeighborResult::Error;
+}
+
+void showImage(void* parameter) {
+    String path = *static_cast<String*>(parameter);
+    bool fullscreen = false, redraw = true;
+    auto& system = System::getInstance();
+    while (true) {
+        if (redraw) {
+            if (fullscreen) system.gfx->fillScreen(RGB565_BLACK);
+            else clearContent();
+            decodeStarted = millis();
+            cancelled = timedOut = ioFailed = false;
+            const char* error = loadImage(path, fullscreen);
+            imageFile.close();
+            if (cancelled) {
+                releaseButton(BUTTON_LEFT_PIN);
+                break;
+            }
+            if (timedOut) error = "Image loading exceeded 10 seconds.";
+            else if (ioFailed) error = "SD read failed or image is damaged.";
+            if (error) {
+                if (fullscreen) system.gfx->fillScreen(RGB565_BLACK);
+                message(error);
+            }
+            redraw = false;
+        }
+        if (digitalRead(BUTTON_LEFT_PIN) == LOW) {
+            releaseButton(BUTTON_LEFT_PIN);
+            break;
+        } else if (digitalRead(BUTTON_RIGHT_PIN) == LOW) {
+            releaseButton(BUTTON_RIGHT_PIN);
+            fullscreen = !fullscreen;
+            system.gfx->fillScreen(RGB565_BLACK);
+            system.interface.setInfoPanelVisible(!fullscreen);
+            redraw = true;
+        } else if (digitalRead(BUTTON_UP_PIN) == LOW || digitalRead(BUTTON_DOWN_PIN) == LOW) {
+            const bool forward = digitalRead(BUTTON_UP_PIN) != LOW;
+            releaseButton(forward ? BUTTON_DOWN_PIN : BUTTON_UP_PIN);
+            String next;
+            const NeighborResult result = findNeighbor(path, forward, next);
+            if (result == NeighborResult::Cancelled) {
+                releaseButton(BUTTON_LEFT_PIN);
+                break;
+            }
+            if (result == NeighborResult::Found) {
+                path = next;
+                redraw = true;
+            } else if (result == NeighborResult::Error) {
+                if (fullscreen) system.gfx->fillScreen(RGB565_BLACK);
+                message("Gallery could not be scanned.");
+            }
+        }
+        delay(10);
+    }
+    system.gfx->fillScreen(RGB565_BLACK);
+    system.interface.setInfoPanelVisible(true);
     clearContent();
 }
 

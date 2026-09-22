@@ -151,7 +151,12 @@ Copy images into `/PocketBox/Gallery` on the SD card. Gellery creates this folde
 if it is missing. **Up / Down** select a filename, **Right** opens it, and **Left**
 returns to the list. Press **Left** again to close the application. Each press is
 consumed before changing screens. Lists have 60 files per page, with previous/next
-page entries; subdirectories are skipped. Long names are shortened on screen.
+page entries. While viewing, **Right** toggles fullscreen (hiding the status panel),
+**Up** opens the previous image and **Down** opens the next image in directory/list
+order, including across pages. Navigation skips non-image files and stops at the
+first/last image. Fullscreen stays enabled when changing images; **Left** returns
+directly to the list and restores the status panel. Subdirectories are skipped.
+Long names are shortened on screen.
 Unsupported files remain visible and produce an explanatory message when opened.
 
 Supported images are baseline JPEG/JPG, non-interlaced PNG with up to 8-bit
@@ -162,7 +167,8 @@ GIF and compressed/paletted BMP are not supported. JPEG EXIF orientation is not
 applied. JPEG and PNG use [JPEGDEC](https://github.com/bitbank2/JPEGDEC) and
 [PNGdec](https://github.com/bitbank2/PNGdec).
 
-Images are centered below the status panel and reduced with nearest-neighbour
+Images are centered below the status panel (or across the whole display in
+fullscreen) and reduced with nearest-neighbour
 sampling, preserving their aspect ratio. Small images retain their original size.
 Decoding reads blocks/rows directly from SD without a full image framebuffer.
 The safety limits in `include/GalleryImage.hpp` are **2 MiB per file**, **1024 pixels
@@ -177,6 +183,8 @@ landscape/portrait and odd-sized images, transparent PNG, top-down/bottom-up BMP
 over 60 files, long names, empty/missing folders, oversized/truncated/unsupported
 files, and repeated open/back/exit cycles. Hold Left while viewing/loading to
 confirm it returns only to the list; release and press again to exit.
+Also check fullscreen toggling, status-panel restoration, previous/next across
+page boundaries, the first/last image, and skipping non-image files.
 
 ## Connecting over SSH
 
