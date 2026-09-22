@@ -5,6 +5,7 @@
 
 #define MAIN_FOLDER         "/PocketBox"
 #define SYSTEM_FOLDER       MAIN_FOLDER"/System"
+#define GALLERY_FOLDER      MAIN_FOLDER"/Gallery"
 #define CONFIG_FILE         SYSTEM_FOLDER"/config.json"
 #define NETWORK_FILE        SYSTEM_FOLDER"/networks.json"
 

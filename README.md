@@ -26,6 +26,7 @@ ESP32-C6 PocketBox is an experimental, pocket-sized application platform built a
 - Network information screen with connection status, SSID, IP address, netmask, gateway, DNS, MAC address, RSSI, and channel details.
 - Keyboard Test application that displays text received through the event system.
 - Shell application prototype with an on-screen prompt and text entry.
+- Gellery image viewer with a paginated ListMenu for `/PocketBox/Gallery`, supporting JPEG, PNG and BMP.
 - Mock, Reader, Camera, and Music application icons for UI and launcher development.
 
 ### Event and input system
@@ -144,6 +145,39 @@ On the launcher screen:
 
 Inside the currently implemented applications, **Left** returns to the launcher. Button mapping is application-specific and is expected to be unified as the event system matures.
 
+### Gellery
+
+Copy images into `/PocketBox/Gallery` on the SD card. Gellery creates this folder
+if it is missing. **Up / Down** select a filename, **Right** opens it, and **Left**
+returns to the list. Press **Left** again to close the application. Each press is
+consumed before changing screens. Lists have 60 files per page, with previous/next
+page entries; subdirectories are skipped. Long names are shortened on screen.
+Unsupported files remain visible and produce an explanatory message when opened.
+
+Supported images are baseline JPEG/JPG, non-interlaced PNG with up to 8-bit
+channels (including palettes and transparency), and uncompressed 24/32-bit RGB
+Windows BMP. Transparent PNG pixels are composited onto black; the unused fourth
+byte in 32-bit RGB BMP is ignored. Progressive JPEG, interlaced/16-bit PNG, WebP,
+GIF and compressed/paletted BMP are not supported. JPEG EXIF orientation is not
+applied. JPEG and PNG use [JPEGDEC](https://github.com/bitbank2/JPEGDEC) and
+[PNGdec](https://github.com/bitbank2/PNGdec).
+
+Images are centered below the status panel and reduced with nearest-neighbour
+sampling, preserving their aspect ratio. Small images retain their original size.
+Decoding reads blocks/rows directly from SD without a full image framebuffer.
+The safety limits in `include/GalleryImage.hpp` are **2 MiB per file**, **1024 pixels
+per dimension**, **1,048,576 pixels total**, and a **48 KiB free-heap reserve** before
+allocating buffers/decoders. Fragmented or insufficient memory produces an error.
+Decode callbacks enforce a 10-second processing deadline and allow cancellation
+with Left; an individual blocking SD operation is still subject to the SD driver
+timeout. Decoder buffers and menu entries are released after use.
+
+Validation: run `pio run -e esp32c6` and `pio test -e native`. On hardware, check
+landscape/portrait and odd-sized images, transparent PNG, top-down/bottom-up BMP,
+over 60 files, long names, empty/missing folders, oversized/truncated/unsupported
+files, and repeated open/back/exit cycles. Hold Left while viewing/loading to
+confirm it returns only to the list; release and press again to exit.
+
 ## Connecting over SSH
 
 After the device joins Wi-Fi, read its IP address from the serial monitor and connect with the username configured in `src/main.cpp`:
@@ -226,7 +260,7 @@ The list below is intentionally task-oriented so future contributors can select 
 - [ ] Complete Wi-Fi, display, and system-information settings pages.
 - [ ] Add reusable dialogs, notifications, an on-screen keyboard, and error screens.
 - [ ] Add screenshot capture support for the device display.
-- [ ] Add an image viewer application with support for displaying image files.
+- [x] Add an image viewer application with support for displaying image files.
 - [ ] Optimize redraws using dirty regions and remove blocking UI loops/delays.
 - [ ] Add themes, configurable brightness, and persistent display preferences.
 

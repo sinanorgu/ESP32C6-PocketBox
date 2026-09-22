@@ -3,6 +3,7 @@
 #include <Arduino.h>
 #include <Arduino_GFX_Library.h>
 #include "Definitions.hpp"
+#include <new>
 
 
 class ListMenuItem {
@@ -17,6 +18,13 @@ class ListMenu {
 
     public:
         ListMenu() : innerIndex(0), offset(0), changed(true), itemCount(0), maxVisibleItems(0), textSize(2), textHeight(0), headerHeight(0), header(""), fullRedraw(true), renderedInnerIndex(0), renderedOffset(0), hasRendered(false) {};
+        ~ListMenu(){
+            for(uint8_t i = 0; i < itemCount; ++i){
+                delete items[i];
+            }
+        }
+        ListMenu(const ListMenu&) = delete;
+        ListMenu& operator=(const ListMenu&) = delete;
         void setHeader(const String& header){
             this->header = header;
             updateLayout();
@@ -91,7 +99,10 @@ class ListMenu {
         }
         bool addtoList(const String& name, void (*action)(void *), void* params = nullptr){
             if(itemCount < 64){
-                items[itemCount] = new ListMenuItem(name, action, params);
+                items[itemCount] = new (std::nothrow) ListMenuItem(name, action, params);
+                if(items[itemCount] == nullptr){
+                    return false;
+                }
                 itemCount++;
                 invalidate();
                 return true;
@@ -124,10 +135,10 @@ class ListMenu {
         ListMenuItem* items[64];
         uint8_t itemCount ;
         int maxVisibleItems;
-        int16_t x;
-        int16_t y;
-        int16_t width;
-        int16_t height;
+        int16_t x = 0;
+        int16_t y = 0;
+        int16_t width = 0;
+        int16_t height = 0;
         uint8_t textSize;
         uint16_t textHeight;
         String header;

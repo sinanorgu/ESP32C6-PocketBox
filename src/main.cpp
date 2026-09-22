@@ -16,6 +16,7 @@ void registerSettingsApplication();
 void registerKeyboardTestApplication();
 void registerMockApplication();
 void registerShellApplication();
+void registerGelleryApplication();
 Application* app;
 
 Arduino_DataBus *lcdBus = new Arduino_ESP32SPI(TFT_DC, TFT_CS, TFT_SCLK, TFT_MOSI, SD_MISO_PIN, FSPI, true);
@@ -47,6 +48,7 @@ void setup()
     registerSettingsApplication();
     registerKeyboardTestApplication();
     registerShellApplication();
+    registerGelleryApplication();
     registerMockApplication();
     BLE_init();
 
