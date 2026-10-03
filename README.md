@@ -2,6 +2,12 @@
 
 ESP32-C6 PocketBox is an experimental, pocket-sized application platform built around the Waveshare ESP32-C6-LCD-1.47 board. It combines a small graphical application launcher, physical-button input, SD-card storage, Wi-Fi, Bluetooth Low Energy (BLE), and an SSH-accessible shell in a single embedded device. The project is intended to grow into a useful miniature computer while remaining a practical playground for ESP32-C6 firmware, user interfaces, networking, and I/O.
 
+### Screenshots of the Interface
+
+![PocketBox screenshot 1](docs/ScreenShots/image_ss1.bmp)
+![PocketBox screenshot 2](docs/ScreenShots/image_ss2.bmp)
+![PocketBox screenshot 3](docs/ScreenShots/image_ss3.bmp)
+![PocketBox screenshot 4](docs/ScreenShots/image_ss4.bmp)
 
 ## Features
 
