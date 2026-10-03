@@ -245,11 +245,11 @@ const char* loadImage(const String& path, bool fullscreen) {
     return "Unsupported format. Use JPEG, PNG or BMP.";
 }
 
-String galleryPath(File& file) {
+String galleryPath(File& file, const String& folder) {
     String name = file.name();
     int slash = name.lastIndexOf('/');
     if (slash >= 0) name = name.substring(slash + 1);
-    return String(GALLERY_FOLDER) + "/" + name;
+    return folder + "/" + name;
 }
 
 bool isImage(File& file) {
@@ -265,7 +265,8 @@ enum class NeighborResult { Found, Boundary, Cancelled, Error };
 
 // Walk directory order across list pages, retaining only one candidate path.
 NeighborResult findNeighbor(const String& current, bool forward, String& result) {
-    File directory = SD.open(GALLERY_FOLDER);
+    String folder = current.substring(0, current.lastIndexOf('/'));
+    File directory = SD.open(folder);
     if (!directory || !directory.isDirectory()) return NeighborResult::Error;
     bool foundCurrent = false;
     String previous;
@@ -278,7 +279,7 @@ NeighborResult findNeighbor(const String& current, bool forward, String& result)
         File file = directory.openNextFile();
         if (!file) break;
         if (file.isDirectory()) continue;
-        String path = galleryPath(file);
+        String path = galleryPath(file, folder);
         if (path == current) {
             foundCurrent = true;
             if (!forward) {
@@ -362,6 +363,9 @@ class GelleryApplication : public Application {
 public:
     GelleryApplication() { name = "Gellery"; }
     void run() override {
+        browse(GALLERY_FOLDER);
+    }
+    void browse(const char* folder) {
         if (!System::getInstance().gfx) return;
         if (!System::getInstance().isSDCardInserted || SD.cardType() == CARD_NONE) {
             message("SD card is not available.");
@@ -388,16 +392,24 @@ public:
             ListMenu menu;
             auto* gfx = System::getInstance().gfx;
             menu.setGraphics(0, contentY(), gfx->width(), gfx->height() - contentY());
-            menu.setHeader("Gellery / " + String(page + 1));
+            const bool screenshots = strcmp(folder, GALLERY_FOLDER) != 0;
+            menu.setHeader(String(screenshots ? "ScreenShots / " : "Gellery / ") + String(page + 1));
             bool reload = false;
             PageAction previous{&page, -1, &reload}, next{&page, 1, &reload};
-            File directory = SD.open(GALLERY_FOLDER);
+            File directory = SD.open(folder);
             if (!directory || !directory.isDirectory()) {
                 message("Gallery folder could not be read.");
                 waitBack();
                 return;
             }
             if (page > 0) menu.addtoList("< Previous page", changePage, &previous);
+            if (!screenshots && SD.exists(GALLERY_FOLDER "/ScreenShots")) {
+                menu.addtoList("ScreenShots/", [](void*) {
+                    GelleryApplication viewer;
+                    viewer.browse(GALLERY_FOLDER "/ScreenShots");
+                    clearContent();
+                });
+            }
             size_t seen = 0, count = 0;
             bool more = false, failed = false;
             while (true) {
@@ -409,8 +421,8 @@ public:
                     String filename = file.name();
                     int slash = filename.lastIndexOf('/');
                     if (slash >= 0) filename = filename.substring(slash + 1);
-                    paths[count] = String(GALLERY_FOLDER) + "/" + filename;
-                    if (paths[count].length() != strlen(GALLERY_FOLDER) + 1 + filename.length()) {
+                    paths[count] = String(folder) + "/" + filename;
+                    if (paths[count].length() != strlen(folder) + 1 + filename.length()) {
                         failed = true;
                         break;
                     }

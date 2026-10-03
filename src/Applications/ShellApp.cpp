@@ -6,6 +6,28 @@
 #include "TextBox.hpp"
 #include "Shell.hpp"
 
+namespace {
+class ScreenShellOutput : public ShellOutput {
+public:
+    explicit ScreenShellOutput(Arduino_GFX* gfx) : gfx(gfx) {}
+    void write(const char* text) override {
+        if (firstWrite) {
+            int top = System::getInstance().interface.infoPanelHeight + System::getInstance().interface.margin;
+            gfx->fillRect(0, top, gfx->width(), gfx->height() - top, COLOR_BACKGROUND);
+            gfx->setCursor(5, top + 5);
+            gfx->setTextSize(1);
+            gfx->setTextColor(RGB565_WHITE);
+            firstWrite = false;
+        }
+        gfx->print(text);
+    }
+    void clear() override { gfx->fillScreen(COLOR_BACKGROUND); }
+private:
+    Arduino_GFX* gfx;
+    bool firstWrite = true;
+};
+}
+
 class ShellApplication : public Application {
     public:
         ShellApplication();
@@ -42,13 +64,18 @@ void ShellApplication::run() {
         if(event.type == EventType::TextInput) {        
             //System::getInstance().gfx->print((char)event.event.keyboard.character);
             if(event.event.keyboard.character == 0x0A) { //Newline
-                //shell.executeCommand(txtbox.text); 
+                // Other on-device shell commands are still a UI prototype.
+                if (strcmp(txtbox.text, "screenshot") == 0) {
+                    ScreenShellOutput output(System::getInstance().gfx);
+                    shell.executeCommand(txtbox.text, output);
+                }
                 txtbox.clearText();
 
                 int cursorX = 0;
                 int cursorY = System::getInstance().gfx->getCursorY();
                 System::getInstance().gfx->setCursor(cursorX, cursorY + 16);
                 System::getInstance().gfx->setTextColor(RGB565_BLUE);
+                System::getInstance().gfx->setTextSize(2);
                 System::getInstance().gfx->print(">>"); // Prompt for shell input
                 System::getInstance().gfx->setTextColor(RGB565_WHITE);
                 cursorX = System::getInstance().gfx->getCursorX();

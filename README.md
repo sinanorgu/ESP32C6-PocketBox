@@ -25,7 +25,8 @@ ESP32-C6 PocketBox is an experimental, pocket-sized application platform built a
 - Settings application with Wi-Fi network scanning, known-network management, and a Network information screen.
 - Network information screen with connection status, SSID, IP address, netmask, gateway, DNS, MAC address, RSSI, and channel details.
 - Keyboard Test application that displays text received through the event system.
-- Shell application prototype with an on-screen prompt and text entry.
+- Shell application prototype with an on-screen prompt, text entry and the `screenshot` command.
+- Screenshot capture from SSH or Left+Right, saved as lossless BMP files on SD.
 - Gellery image viewer with a paginated ListMenu for `/PocketBox/Gallery`, supporting JPEG, PNG and BMP.
 - Mock, Reader, Camera, and Music application icons for UI and launcher development.
 
@@ -159,7 +160,8 @@ page entries. While viewing, **Right** toggles fullscreen (hiding the status pan
 **Up** opens the previous image and **Down** opens the next image in directory/list
 order, including across pages. Navigation skips non-image files and stops at the
 first/last image. Fullscreen stays enabled when changing images; **Left** returns
-directly to the list and restores the status panel. Subdirectories are skipped.
+directly to the list and restores the status panel. `ScreenShots/` opens saved
+screenshots; other subdirectories are skipped.
 Long names are shortened on screen.
 Unsupported files remain visible and produce an explanatory message when opened.
 
@@ -190,6 +192,63 @@ to confirm it returns only to the list; press again to exit. Long presses are
 separate events and do not trigger short-click actions.
 Also check fullscreen toggling, status-panel restoration, previous/next across
 page boundaries, the first/last image, and skipping non-image files.
+
+## Screenshots
+
+Run `screenshot` in an SSH shell or in the on-device Shell application. A single
+remote command is also supported:
+
+```bash
+ssh <username>@<device-ip> screenshot
+```
+
+Press **Left + Right together** for the same operation. The existing button chord
+handler consumes the combination, so it does not also navigate or toggle fullscreen.
+The button result is logged over USB serial; the shell reports the saved path or
+an error, and the one-shot SSH command exits with status 0 on success or 1 on failure.
+The SSH server still accepts only one connected client at a time.
+
+Files are saved under `/PocketBox/Gallery/ScreenShots`, created if necessary:
+
+```text
+ScreenShot_20261003_153045Z_0000000042.bmp
+```
+
+Names contain UTC date/time and a 64-bit counter persisted in ESP32 NVS before each
+capture. Existing final/partial files are never reused. Failed captures may leave
+counter gaps. When the clock has not synchronized, the filename includes
+`unsynced_` and the current unsynchronized system date; the counter still provides
+uniqueness across reboots. NTP is started asynchronously using `pool.ntp.org` and
+`time.cloudflare.com`. Saving does not wait for an internet connection.
+
+Images are 320 x 172, uncompressed 24-bit BMP (165,174 bytes), preserving the
+screen's RGB565 colors exactly. BMP avoids PNG compression workspace and is already
+supported by Gellery. Open `ScreenShots/` in Gellery to view them; previous/next
+navigation stays within that folder. Reopen the gallery if the folder was first
+created while its file list was already open.
+
+The current LCD driver has no pixel-readback API. `ScreenCaptureDisplay` mirrors
+all drawing through the normal graphics interface to an SD-backed RGB565 shadow
+at `/PocketBox/System/.screen.rgb565`. It uses three eight-row caches (15 KiB) and
+a 960-byte output row, instead of a 107.5 KiB full-frame RAM allocation. The shadow
+is initialized to black with the LCD at boot and recreated on every boot. Do not
+edit/delete this internal file while the firmware is running. It adds SD I/O to
+normal drawing; display performance depends on the card.
+
+LCD writes and shadow updates share a recursive display mutex. Capture locks
+out drawing while it streams the snapshot to SD, without allocating a second
+framebuffer. Each LCD SPI transaction ends before shadow SD I/O starts because
+the devices share the bus. A detected shadow read/write failure disables capture
+until reboot rather than silently saving stale pixels. Display drawing can still
+continue. An unavailable/full SD card returns an error. Incomplete writes use a
+`.part` suffix and are renamed only after completion; power loss can leave a
+`.part` file which may be deleted later.
+
+Other firmware features can call `takeScreenshot()` from `ScreenCapture.hpp` and
+inspect `ScreenshotResult`. Call it from task context, not an interrupt. It may
+block while drawing finishes or the SD file is written. Firmware builds validate
+the integration; actual LCD appearance, shared-bus latency and capture during SSH
+or image decoding still need verification on the physical board.
 
 ## Connecting over SSH
 
@@ -228,7 +287,7 @@ transfers and file metadata preservation are not implemented yet.
 - Wi-Fi scanning and connection operations are serialized, but the scan is synchronous and can temporarily block the Settings UI.
 - Settings can scan and display SSIDs, connect to a scanned network, manage known networks, and display current Network details; provisioning is still limited to the existing password-entry flow.
 - Display Settings and System Info entries are placeholders.
-- The on-device Shell application accepts text but does not execute the entered command or render command output yet.
+- The on-device Shell application executes `screenshot`; other commands remain a UI prototype.
 - The SSH banner mentions `help`, but a `help` command is not implemented.
 - `reboot` and `shutdown` produce shell result values, but the SSH server does not perform either action.
 - SSH supports one client at a time, password authentication only, and no command history; Up/Down escape sequences are placeholders.
@@ -239,7 +298,7 @@ transfers and file metadata preservation are not implemented yet.
 - Keyboard key-up/key-down, mouse, application lifecycle, battery, Wi-Fi, and Bluetooth event types are defined but not fully produced or consumed.
 - Application folders exist in the model but are not shown or navigable in the launcher. Each demo currently creates a separate `Utilities` folder instance.
 - Reader, Camera, Music, and Mock App are visual placeholders and do not provide their named functionality.
-- The status-panel clock is hard-coded to `12:34`; there is no RTC or NTP time synchronization.
+- The status-panel clock is still hard-coded to `12:34`. NTP synchronizes the system clock for screenshot filenames when Wi-Fi/internet are available; there is no battery-backed RTC.
 - There is no battery measurement, battery icon, power management, sleep mode, or true software shutdown.
 - SD-card hot-plug detection and recovery are not implemented.
 - Shell parsing does not support quoting, escaped spaces, pipes, redirection, wildcards, or recursive file operations.
@@ -272,7 +331,7 @@ The list below is intentionally task-oriented so future contributors can select 
 - [ ] Implement a real clock using NTP, with timezone configuration and offline fallback.
 - [ ] Complete Wi-Fi, display, and system-information settings pages.
 - [ ] Add reusable dialogs, notifications, an on-screen keyboard, and error screens.
-- [ ] Add screenshot capture support for the device display.
+- [x] Add screenshot capture support for the device display.
 - [x] Add an image viewer application with support for displaying image files.
 - [ ] Optimize redraws using dirty regions and remove blocking UI loops/delays.
 - [ ] Add themes, configurable brightness, and persistent display preferences.

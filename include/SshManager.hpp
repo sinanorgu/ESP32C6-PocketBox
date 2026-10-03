@@ -38,7 +38,8 @@ enum class ChannelMode
 {
     Shell,
     ScpUpload,
-    ScpDownload
+    ScpDownload,
+    Screenshot
 };
 
 

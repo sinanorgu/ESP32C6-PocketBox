@@ -5,6 +5,7 @@
 #include <Arduino_GFX_Library.h>
 #include "Definitions.hpp"
 #include "Screen.hpp"
+#include "ScreenCapture.hpp"
 #include "System.hpp"
 #include "BleManager.hpp"
 #include "SdCardManager.hpp"
@@ -21,7 +22,9 @@ Application* app;
 
 Arduino_DataBus *lcdBus = new Arduino_ESP32SPI(TFT_DC, TFT_CS, TFT_SCLK, TFT_MOSI, SD_MISO_PIN, FSPI, true);
 
-Arduino_GFX *gfx = new Arduino_ST7789(lcdBus, TFT_RST, 1, true, TFT_WIDTH, TFT_HEIGHT, TFT_X_OFFSET, TFT_Y_OFFSET, TFT_X_OFFSET, TFT_Y_OFFSET);
+Arduino_ST7789 lcd(lcdBus, TFT_RST, 1, true, TFT_WIDTH, TFT_HEIGHT, TFT_X_OFFSET, TFT_Y_OFFSET, TFT_X_OFFSET, TFT_Y_OFFSET);
+ScreenCaptureDisplay screen(lcd);
+Arduino_GFX *gfx = &screen;
 
 // SD kütüphanesi için SPI nesnesi
 SPIClass sdSpi(FSPI);
@@ -40,7 +43,9 @@ void setup()
     Serial.println();
     Serial.println("ESP32-C6 SD + LCD baslatiliyor...");
     System::getInstance().setGFX(gfx);
+    setScreenshotDisplay(&screen);
     System::getInstance().setSshManager(&sshManager);
+
     
     // ========================================
     // Application registration
@@ -73,7 +78,7 @@ void setup()
         Serial.println("LCD baslatilamadi.");
     }
 
-    // Portrait orientation: 172 x 320
+    // Landscape orientation: 320 x 172
     gfx->fillScreen(COLOR_BACKGROUND);
     gfx->setTextWrap(true);
 
@@ -111,17 +116,28 @@ void setup()
         const char* username = "admin";
         const char* password = "admin";
         int8_t fsCreateResult = fsManager.createFileSystem((char*)username, (char*)password);
+        if (!screen.beginCapture()) Serial.println("Screenshot shadow could not be initialized.");
     }
 
 
     System::getInstance().wifiManager.loadKnownNetworks();
     System::getInstance().wifiManager.startAutoConnectTask();
+    // UTC filenames; synchronization happens asynchronously once Wi-Fi is available.
+    configTime(0, 0, "pool.ntp.org", "time.cloudflare.com");
 
 
     digitalWrite(SD_CS_PIN, HIGH);
 
     setBacklightBrightness(127);
     app = System::getInstance().rootApplicationFolder->getApplication(0);
+    System::getInstance().setButtonHandler([](const Event& event, void*) {
+        const uint8_t shortcut = buttonMask(ButtonCode::Left) | buttonMask(ButtonCode::Right);
+        if (event.type != EventType::ButtonChord || event.event.button.pressedMask != shortcut) return false;
+        ScreenshotResult result = takeScreenshot();
+        if (result.ok) Serial.printf("Screenshot saved: %s\n", result.path);
+        else Serial.printf("Screenshot failed: %s\n", result.error);
+        return true;
+    });
     if (!System::getInstance().buttons.begin(*System::getInstance().systemEventQueue)) {
         Serial.println("Button input task could not be started.");
     }

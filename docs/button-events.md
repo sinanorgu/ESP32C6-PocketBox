@@ -53,8 +53,8 @@ if (event.type == EventType::TextInput) {
 
 Default actions use short clicks on release. Menus/launcher opt into navigation
 repeats; release after repeats adds no extra step. Opening, closing, fullscreen
-and photo switching never repeat. Long presses and chords have no built-in
-shortcut assignment yet. Use a short Left press to go back; a long press does
+and photo switching never repeat. Long presses have no built-in shortcut assignment. The Left+Right chord saves a
+screenshot; other combinations remain available for future shortcuts. Use a short Left press to go back; a long press does
 not emit a click on release. This prevents held keys/chords from activating
 nested screens accidentally.
 
@@ -89,7 +89,8 @@ queue full. Callers must retry/report failure, especially releases. An owner
 should `releaseAll` when its scenario/session ends. These are task-context, not
 ISR, APIs. Scenarios should wait for screen readiness before their next action.
 This change provides the C++ API; shell commands, ClumsyPL bindings, USB test
-protocols and screenshot capture can be connected later.
+protocols can be connected later. Left+Right now invokes screenshot capture through
+the global handler installed in `setup()`; see the README for storage and commands.
 
 ## Global shortcuts
 

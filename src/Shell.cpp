@@ -1,8 +1,22 @@
 #include "Shell.hpp"
+#include "ScreenCapture.hpp"
 #include "clumsyPL/ClumsyPL.hpp"
 #include <WiFi.h>
 
 #include <new>
+
+bool executeScreenshot(ShellOutput& output) {
+    ScreenshotResult result = takeScreenshot();
+    if (result.ok) {
+        output.write("Screenshot saved: ");
+        output.write(result.path);
+    } else {
+        output.write("Screenshot failed: ");
+        output.write(result.error);
+    }
+    output.write("\r\n");
+    return result.ok;
+}
 
 
 namespace

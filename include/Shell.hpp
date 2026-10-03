@@ -30,6 +30,7 @@ void executeCp(ShellOutput& output, const char* sourcePath, const char* destinat
 void executeMv(ShellOutput& output, const char* sourcePath, const char* destinationPath, const char* currentDirectory);
 void executePwd(ShellOutput& output, const char* currentDirectory);
 void executeIfconfig(ShellOutput& output);
+bool executeScreenshot(ShellOutput& output);
 void executeRmdir(ShellOutput& output, const char* path, const char* currentDirectory);
 void executeCpl(ShellOutput& output, const char* path, const char* currentDirectory);
 void executeEcho(ShellOutput& output, const char* command, const char* currentDirectory);
@@ -71,6 +72,10 @@ class Shell {
             else if (strcmp(cmd, "ifconfig") == 0) {
                 Serial.println("Executing ifconfig command...");
                 executeIfconfig(output);
+            }
+            else if (strcmp(cmd, "screenshot") == 0) {
+                if (argc != 1) output.write("Usage: screenshot\r\n");
+                else executeScreenshot(output);
             }
             else if (strcmp(cmd, "exit") == 0) {
                 Serial.println("Exiting shell...");

@@ -212,6 +212,12 @@ void SSHManager::serverTask()
             {
                 handleClient(session, channel);
             }
+            else if (channelMode == ChannelMode::Screenshot)
+            {
+                SSHOutput output(channel);
+                bool saved = executeScreenshot(output);
+                ssh_channel_request_send_exit_status(channel, saved ? 0 : 1);
+            }
             else
             {
                 handleScpTransfer(channel, channelMode, channelCommand);
@@ -380,6 +386,13 @@ ssh_channel SSHManager::acceptShellChannel(
             else if (subtype == SSH_CHANNEL_REQUEST_EXEC)
             {
                 const char* command = ssh_message_channel_request_command(message);
+                if (command && strcmp(command, "screenshot") == 0)
+                {
+                    mode = ChannelMode::Screenshot;
+                    ssh_message_channel_request_reply_success(message);
+                    ssh_message_free(message);
+                    return channel;
+                }
                 if (command && parseScpCommand(
                         command,
                         mode,
